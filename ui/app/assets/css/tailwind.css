@@ -1,0 +1,25 @@
+@import url('https://fonts.googleapis.com/css2?family=Mulish:ital,wght@0,200..1000;1,200..1000&family=Space+Mono:ital,wght@0,400;0,700;1,400;1,700&display=swap');
+@import "tailwindcss";
+
+@theme {
+  --color-dark: #17181c;
+  --color-light: #1a1c20;
+  --color-para: #3f4145;
+  --color-para-light: #505257;
+  --color-input: #201f24;
+  --color-main: #ef9143;
+}
+
+* {
+    /* font-family: "Space Mono", monospace; */
+    font-family: "Mulish", sans-serif;
+    @apply subpixel-antialiased;
+}
+
+h1, h2, h3, button, strong, span{
+    @apply font-bold;
+}
+
+button, a{
+  @apply cursor-pointer;
+}
