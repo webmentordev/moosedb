@@ -1,0 +1,33 @@
+--------------------
+# Improvements
+--------------------
+- refactor the code into modules/files for clear understanding
+
+--------------------
+# Nuxt (Frontend)
+--------------------
+- setup login api calls
+- create login validation system
+- create default token validation middleware
+
+
+
+--------------------
+# Actix (Backend)
+--------------------
+- create session validation system like Laravel
+- add cli commands parsing
+    - create serve command
+    - create update password command
+    - add command to change port
+- fill default configurations
+    - default hash for encryption
+- create token validation api
+- secure login routes
+    - create api for login
+    - create api for signout
+- secure super admin routes
+    - create api for updating password from dashboard
+    - create cli command for updating password
+
+(This file is just to keep track of progress and new features to add)
