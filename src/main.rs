@@ -1,5 +1,7 @@
 
 use actix_web::{get, post, web, App, HttpServer, HttpResponse, HttpRequest, Result, Responder};
+use r2d2_sqlite::SqliteConnectionManager;
+use r2d2::Pool;
 use serde::{Serialize};
 use mime_guess::from_path;
 use rust_embed::RustEmbed;
@@ -14,12 +16,18 @@ struct Info {
     actix_web: f32,
     actix_files: f32,
     rusqlite: f32,
+    r2d2: f32,
+    r2d2_sqlite: f32,
     serde: f32,
     serde_json: f32,
     rust_embed: f32,
     mime_guess: f32
 }
 
+type DbPool = Pool<SqliteConnectionManager>;
+struct AppData {
+    database: DbPool,
+}
 
 async fn static_files(req: HttpRequest) -> HttpResponse {
     let path = req.path().trim_start_matches('/');
@@ -43,9 +51,27 @@ async fn static_files(req: HttpRequest) -> HttpResponse {
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
     let port = 8855;
+    
+    let manager = SqliteConnectionManager::file("database.sqlite");
+    let pool = Pool::new(manager).expect("Failed to create pool");
+    {
+        let conn = pool.get().expect("Failed to get connection");
+        if let Err(e) = moosedb::initialize_db(&conn) {
+            println!("Database could not be created: {}", e);
+            return Ok(());
+        }
+    }
+    
     println!("🚀 Listening at http://127.0.0.1:{}", port);
-    HttpServer::new(|| {
-        App::new().service(index).service(web::scope("/api").service(get_version)).default_service(web::route().to(static_files))
+    
+    HttpServer::new(move || {
+        App::new()
+            .app_data(web::Data::new(AppData { 
+                database: pool.clone() 
+            }))
+            .service(index)
+            .service(web::scope("/api").service(get_version))
+            .default_service(web::route().to(static_files))
     })
     .bind(("0.0.0.0", port))?
     .run()
@@ -59,7 +85,9 @@ async fn index() -> Result<impl Responder> {
         version: 0.1,
         actix_web: 4.0,
         actix_files: 0.6,
-        rusqlite: 0.38,
+        rusqlite: 0.37,
+        r2d2: 0.8,
+        r2d2_sqlite: 0.31,
         serde: 1.0,
         serde_json: 1.0,
         rust_embed: 8.0,
@@ -74,7 +102,9 @@ async fn get_version() -> Result<impl Responder> {
         version: 0.1,
         actix_web: 4.0,
         actix_files: 0.6,
-        rusqlite: 0.38,
+        rusqlite: 0.37,
+        r2d2: 0.8,
+        r2d2_sqlite: 0.31,
         serde: 1.0,
         serde_json: 1.0,
         rust_embed: 8.0,
