@@ -1,6 +1,7 @@
 
 use actix_web::{get, post, web, App, HttpServer, HttpResponse, HttpRequest, Result, Responder};
 use r2d2_sqlite::SqliteConnectionManager;
+use std::path::Path;
 use r2d2::Pool;
 use serde::{Serialize};
 use mime_guess::from_path;
@@ -51,12 +52,17 @@ async fn static_files(req: HttpRequest) -> HttpResponse {
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
     let port = 8855;
+    let mut create_new_db = false;
+    let file_exists = Path::new("database.sqlite").exists();
     
+    if !file_exists {
+        create_new_db = true;
+    }
     let manager = SqliteConnectionManager::file("database.sqlite");
     let pool = Pool::new(manager).expect("Failed to create pool");
     {
         let conn = pool.get().expect("Failed to get connection");
-        if let Err(e) = moosedb::initialize_db(&conn) {
+        if let Err(e) = moosedb::initialize_db(&conn, create_new_db) {
             println!("Database could not be created: {}", e);
             return Ok(());
         }

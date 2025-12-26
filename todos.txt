@@ -16,6 +16,7 @@
 # Actix (Backend)
 --------------------
 - create session validation system like Laravel
+- create logs database
 - add cli commands parsing
     - create serve command
     - create update password command
