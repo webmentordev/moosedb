@@ -61,7 +61,22 @@
         }
         if(errors.value.count > 0) return;
 
-        const data = await $fetch("/admin/api/get-login");
+        try{
+            const data = await $fetch("/auth/login", {
+                method: "POST",
+                headers: {
+                    "Accept": "application/json",
+                    "Content-Type": "application/json"
+                },
+                body: {
+                    email: email.value,
+                    password: password.value
+                }
+            });
+            console.log(data);
+        }catch(e){
+            errors.value.message = e.data.message;
+        }
     }
 
     function reset_errors(){

@@ -1,11 +1,16 @@
 
-use actix_web::{get, post, web, App, HttpServer, HttpResponse, HttpRequest, Result, Responder};
+use actix_web::{get, post, web, App, HttpServer, HttpResponse, HttpRequest, HttpMessage, Result, Responder, middleware};
+use actix_web::dev::ServiceRequest;
+use actix_web_httpauth::extractors::bearer::BearerAuth;
+use actix_web_httpauth::middleware::HttpAuthentication;
+use jsonwebtoken::{encode, decode, Header, Validation, EncodingKey, DecodingKey};
 use r2d2_sqlite::SqliteConnectionManager;
 use std::path::Path;
 use r2d2::Pool;
-use serde::{Serialize};
+use serde::{Serialize, Deserialize};
 use mime_guess::from_path;
 use rust_embed::RustEmbed;
+use std::time::{SystemTime, UNIX_EPOCH};
 
 #[derive(RustEmbed)]
 #[folder = "ui/dist"]
@@ -25,9 +30,39 @@ struct Info {
     mime_guess: f32
 }
 
+
+#[derive(Debug, Serialize, Deserialize)]
+struct Claims {
+    sub: String,
+    exp: usize,
+    iat: usize,
+    email: String,
+}
+
+#[derive(Deserialize)]
+struct LoginRequest {
+    email: String,
+    password: String,
+}
+
+
+#[derive(Serialize)]
+struct LoginResponse {
+    token: String,
+    success: bool,
+    message: String,
+}
+
+#[derive(Serialize)]
+struct ErrorResponse {
+    success: bool,
+    message: String,
+}
+
 type DbPool = Pool<SqliteConnectionManager>;
 struct AppData {
     database: DbPool,
+    jwt_secret: String,
 }
 
 async fn static_files(req: HttpRequest) -> HttpResponse {
@@ -67,21 +102,56 @@ async fn main() -> std::io::Result<()> {
             return Ok(());
         }
     }
+
+    let jwt_secret = "Z#b1YraC@dCo9EtZwl*@^@CWiBkaQqC9X3D)@*#zoDmK@9(z8LURqIDrEMpk7tmA~tZE3F".to_string();
     
     println!("🚀 Listening at http://127.0.0.1:{}", port);
     
     HttpServer::new(move || {
+        let auth = HttpAuthentication::bearer(validator);
         App::new()
             .app_data(web::Data::new(AppData { 
-                database: pool.clone() 
+                database: pool.clone(),
+                jwt_secret: jwt_secret.clone(),
             }))
+            .wrap(middleware::Logger::default())
             .service(index)
+            .route("/auth/login", web::post().to(login))
+            .service(
+                web::scope("/admin/api")
+                    .wrap(auth.clone())
+                    .service(get_version)
+            )
             .service(web::scope("/api").service(get_version))
             .default_service(web::route().to(static_files))
     })
     .bind(("0.0.0.0", port))?
     .run()
     .await
+}
+
+async fn login(
+    data: web::Data<AppData>,
+    credentials: web::Json<LoginRequest>,
+) -> impl Responder {
+    if credentials.email == "admin@moosedb.com" && credentials.password == "moosedb" {
+        match create_jwt(&credentials.email, "admin@moosedb.com", &data.jwt_secret) {
+            Ok(token) => HttpResponse::Ok().json(LoginResponse {
+                token,
+                success: true,
+                message: "Login successful".to_string(),
+            }),
+            Err(_) => HttpResponse::InternalServerError().json(ErrorResponse {
+                success: false,
+                message: "Failed to create token".to_string(),
+            }),
+        }
+    } else {
+        HttpResponse::Unauthorized().json(ErrorResponse {
+            success: false,
+            message: "Invalid credentials".to_string(),
+        })
+    }
 }
 
 
@@ -116,4 +186,56 @@ async fn get_version() -> Result<impl Responder> {
         rust_embed: 8.0,
         mime_guess: 2.0
     }))
+}
+
+
+async fn validator(
+    req: ServiceRequest,
+    credentials: BearerAuth,
+) -> Result<ServiceRequest, (actix_web::Error, ServiceRequest)> {
+    let jwt_secret = req
+        .app_data::<web::Data<AppData>>()
+        .map(|data| data.jwt_secret.clone())
+        .unwrap_or_default();
+
+    match verify_jwt(credentials.token(), &jwt_secret) {
+        Ok(claims) => {
+            req.extensions_mut().insert(claims);
+            Ok(req)
+        }
+        Err(_) => {
+            let error = actix_web::error::ErrorUnauthorized("Invalid token");
+            Err((error, req))
+        }
+    }
+}
+
+fn create_jwt(email: &str, user_id: &str, secret: &str) -> Result<String, jsonwebtoken::errors::Error> {
+    let now = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap()
+        .as_secs() as usize;
+
+    let claims = Claims {
+        sub: user_id.to_string(),
+        email: email.to_string(),
+        exp: now + 3600,
+        iat: now,
+    };
+
+    encode(
+        &Header::default(),
+        &claims,
+        &EncodingKey::from_secret(secret.as_ref()),
+    )
+}
+
+fn verify_jwt(token: &str, secret: &str) -> Result<Claims, jsonwebtoken::errors::Error> {
+    let token_data = decode::<Claims>(
+        token,
+        &DecodingKey::from_secret(secret.as_ref()),
+        &Validation::default(),
+    )?;
+
+    Ok(token_data.claims)
 }

@@ -1,12 +1,12 @@
 --------------------
 # Improvements
 --------------------
-- refactor the code into modules/files for clear understanding
+X refactor the code into modules/files for clear understanding
 
 --------------------
 # Nuxt (Frontend)
 --------------------
-- setup login api calls
+X setup login api calls
 - create login validation system
 - create default token validation middleware
 
@@ -22,7 +22,8 @@
     - create update password command
     - add command to change port
 - fill default configurations
-    - default hash for encryption
+    X default hash for encryption
+    - use default token created in the DB
 - create token validation api
 - secure login routes
     - create api for login
