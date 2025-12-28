@@ -7,8 +7,11 @@ X refactor the code into modules/files for clear understanding
 # Nuxt (Frontend)
 --------------------
 X setup login api calls
-- create login validation system
-- create default token validation middleware
+X create login validation system
+X create default token validation middleware
+X create composables for API calls
+X create composables for token validation
+X create guest auth for login page
 
 
 
@@ -31,5 +34,9 @@ X setup login api calls
 - secure super admin routes
     - create api for updating password from dashboard
     - create cli command for updating password
-
+- add email sending feature
+    - add saving smtp creds
+    - add html and css template customization for Email
+    - sign one-time url for password reset
+    - Add default forgot password
 (This file is just to keep track of progress and new features to add)

@@ -36,9 +36,12 @@
 
 <script setup>
     definePageMeta({
+        middleware: 'auth',
         layout: 'auth',
     });
 
+    const { setToken } = useAuthToken();
+    
     const email = ref("");
     const password = ref("");
     const processing = ref(false);
@@ -50,6 +53,7 @@
     });
 
     async function login(){
+        processing.value = true;
         reset_errors();
         if (email.value == ""){
             errors.value.email = "Email is required";
@@ -59,9 +63,12 @@
             errors.value.password = "Password is required";
             errors.value.count += 1;
         }
-        if(errors.value.count > 0) return;
+        if(errors.value.count > 0) {
+            processing.value = false;
+            return;
+        };
 
-        try{
+        try {
             const data = await $fetch("/auth/login", {
                 method: "POST",
                 headers: {
@@ -69,13 +76,19 @@
                     "Content-Type": "application/json"
                 },
                 body: {
-                    email: email.value,
-                    password: password.value
+                    email: email.value.trim(),
+                    password: password.value.trim()
                 }
             });
-            console.log(data);
-        }catch(e){
-            errors.value.message = e.data.message;
+            if (data.token) {
+                setToken(data.token);
+                await navigateTo('/_/');
+            }
+        } catch (e) {
+            errors.value.message = e.data?.error || 'Login failed';
+            reset_values();
+        } finally {
+            processing.value = false;
         }
     }
 
