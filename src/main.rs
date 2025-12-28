@@ -5,6 +5,7 @@ use actix_web_httpauth::extractors::bearer::BearerAuth;
 use actix_web_httpauth::middleware::HttpAuthentication;
 use jsonwebtoken::{encode, decode, Header, Validation, EncodingKey, DecodingKey};
 use r2d2_sqlite::SqliteConnectionManager;
+use std::collections::HashMap;
 use std::path::Path;
 use r2d2::Pool;
 use serde::{Serialize, Deserialize};
@@ -63,6 +64,7 @@ type DbPool = Pool<SqliteConnectionManager>;
 struct AppData {
     database: DbPool,
     jwt_secret: String,
+    configs: HashMap<String, String>
 }
 
 async fn static_files(req: HttpRequest) -> HttpResponse {
@@ -95,15 +97,14 @@ async fn main() -> std::io::Result<()> {
     }
     let manager = SqliteConnectionManager::file("database.sqlite");
     let pool = Pool::new(manager).expect("Failed to create pool");
-    {
-        let conn = pool.get().expect("Failed to get connection");
-        if let Err(e) = moosedb::initialize_db(&conn, create_new_db) {
-            println!("Database could not be created: {}", e);
-            return Ok(());
-        }
+    let conn = pool.get().expect("Failed to get connection");
+    if let Err(e) = moosedb::initialize_db(&conn, create_new_db) {
+        println!("Database could not be created: {}", e);
+        return Ok(());
     }
 
-    let jwt_secret = "Z#b1YraC@dCo9EtZwl*@^@CWiBkaQqC9X3D)@*#zoDmK@9(z8LURqIDrEMpk7tmA~tZE3F".to_string();
+    let configs = moosedb::load_configs(&conn).unwrap();
+    let jwt_secret = configs.get("secret").unwrap().clone();
     
     println!("🚀 Listening at http://127.0.0.1:{}", port);
     
@@ -113,6 +114,7 @@ async fn main() -> std::io::Result<()> {
             .app_data(web::Data::new(AppData { 
                 database: pool.clone(),
                 jwt_secret: jwt_secret.clone(),
+                configs: configs.clone()
             }))
             .wrap(middleware::Logger::default())
             .service(index)
@@ -128,30 +130,6 @@ async fn main() -> std::io::Result<()> {
     .bind(("0.0.0.0", port))?
     .run()
     .await
-}
-
-async fn login(
-    data: web::Data<AppData>,
-    credentials: web::Json<LoginRequest>,
-) -> impl Responder {
-    if credentials.email == "admin@moosedb.com" && credentials.password == "moosedb" {
-        match create_jwt(&credentials.email, "admin@moosedb.com", &data.jwt_secret) {
-            Ok(token) => HttpResponse::Ok().json(LoginResponse {
-                token,
-                success: true,
-                message: "Login successful".to_string(),
-            }),
-            Err(_) => HttpResponse::InternalServerError().json(ErrorResponse {
-                success: false,
-                message: "Failed to create token".to_string(),
-            }),
-        }
-    } else {
-        HttpResponse::Unauthorized().json(ErrorResponse {
-            success: false,
-            message: "Invalid credentials".to_string(),
-        })
-    }
 }
 
 
@@ -188,6 +166,31 @@ async fn get_version() -> Result<impl Responder> {
     }))
 }
 
+
+
+async fn login(
+    data: web::Data<AppData>,
+    credentials: web::Json<LoginRequest>,
+) -> impl Responder {
+    if credentials.email == "admin@moosedb.com" && credentials.password == "moosedb" {
+        match create_jwt(&credentials.email, "admin@moosedb.com", &data.jwt_secret) {
+            Ok(token) => HttpResponse::Ok().json(LoginResponse {
+                token,
+                success: true,
+                message: "Login successful".to_string(),
+            }),
+            Err(_) => HttpResponse::InternalServerError().json(ErrorResponse {
+                success: false,
+                message: "Failed to create token".to_string(),
+            }),
+        }
+    } else {
+        HttpResponse::Unauthorized().json(ErrorResponse {
+            success: false,
+            message: "Invalid credentials".to_string(),
+        })
+    }
+}
 
 async fn validator(
     req: ServiceRequest,
