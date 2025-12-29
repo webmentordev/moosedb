@@ -82,11 +82,11 @@
             });
             if (data.token) {
                 setToken(data.token);
+                reset_values();
                 await navigateTo('/_/');
             }
         } catch (e) {
-            errors.value.message = e.data?.error || 'Login failed';
-            reset_values();
+            errors.value.message = e.data?.error || 'Invalid login credientials.';
         } finally {
             processing.value = false;
         }

@@ -12,6 +12,7 @@ use serde::{Serialize, Deserialize};
 use mime_guess::from_path;
 use rust_embed::RustEmbed;
 use std::time::{SystemTime, UNIX_EPOCH};
+use bcrypt::verify;
 
 #[derive(RustEmbed)]
 #[folder = "ui/dist"]
@@ -167,28 +168,51 @@ async fn get_version() -> Result<impl Responder> {
 }
 
 
-
 async fn login(
     data: web::Data<AppData>,
     credentials: web::Json<LoginRequest>,
 ) -> impl Responder {
-    if credentials.email == "admin@moosedb.com" && credentials.password == "moosedb" {
-        match create_jwt(&credentials.email, "admin@moosedb.com", &data.jwt_secret) {
-            Ok(token) => HttpResponse::Ok().json(LoginResponse {
-                token,
-                success: true,
-                message: "Login successful".to_string(),
-            }),
-            Err(_) => HttpResponse::InternalServerError().json(ErrorResponse {
+
+    let conn = match data.database.get(){
+        Ok(conn) => conn,
+        Err(_) => {
+            return HttpResponse::InternalServerError().json(ErrorResponse{
                 success: false,
-                message: "Failed to create token".to_string(),
-            }),
+                message: "Database connection failed.".to_string()
+            });
         }
-    } else {
-        HttpResponse::Unauthorized().json(ErrorResponse {
+    };
+
+    let result: Result<(String, String), rusqlite::Error> = conn.query_row("SELECT email, password from _super_admins WHERE email = ?1", 
+    [&credentials.email], 
+    |row| Ok((row.get(0)?, row.get(1)?))); 
+
+    match result {
+        Ok((email, hashed_password)) => {
+            let is_valid = verify(&credentials.password, &hashed_password).unwrap_or(false);
+            if is_valid {
+                match create_jwt(&email, &email, &data.jwt_secret) {
+                    Ok(token) => HttpResponse::Ok().json(LoginResponse {
+                        token,
+                        success: true,
+                        message: "Login successful".to_string(),
+                    }),
+                    Err(_) => HttpResponse::InternalServerError().json(ErrorResponse {
+                        success: false,
+                        message: "Failed to create token".to_string(),
+                    }),
+                }
+            }else{
+                HttpResponse::Unauthorized().json(ErrorResponse{
+                    success: false,
+                    message: "Email or Password does not match.".to_string(),
+                })
+            }
+        }
+        Err(_) => HttpResponse::Unauthorized().json(ErrorResponse {
             success: false,
-            message: "Invalid credentials".to_string(),
-        })
+            message: "Email not found!".to_string(),
+        }),
     }
 }
 

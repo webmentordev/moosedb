@@ -39,7 +39,7 @@ pub fn initialize_db(conn: &Connection, create_new_db: bool) -> Result<()> {
         conn.execute(
             "INSERT INTO _super_admins (name, email, password) 
             VALUES (?1, ?2, ?3)",
-            ["Admin".to_string(), "admin@moosedb".to_string(), hashed_password],
+            ["Admin".to_string(), "admin@moosedb.com".to_string(), hashed_password],
         )
         .unwrap();
     }
