@@ -17,9 +17,17 @@
 }
 
 h1, h2, h3, button, strong, span{
-    @apply font-bold;
+    @apply font-bold text-white;
+}
+
+p{
+  @apply text-para-light;
 }
 
 button, a{
   @apply cursor-pointer;
+}
+
+.router-link-active, .router-link-exact-active{
+  @apply border-main;
 }

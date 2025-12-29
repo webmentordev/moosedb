@@ -83,7 +83,7 @@
             if (data.token) {
                 setToken(data.token);
                 reset_values();
-                await navigateTo('/_/');
+                await navigateTo('/_/collections');
             }
         } catch (e) {
             errors.value.message = e.data?.error || 'Invalid login credientials.';

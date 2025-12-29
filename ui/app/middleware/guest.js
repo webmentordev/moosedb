@@ -3,6 +3,6 @@ export default defineNuxtRouteMiddleware((to, from) => {
     const token = getToken();
     
     if (token) {
-        return navigateTo('/_/');
+        return navigateTo('/_/collections');
     }
 });
