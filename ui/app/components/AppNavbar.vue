@@ -1,5 +1,5 @@
 <template>
-    <section class="w-25 bg-dark p-3 flex flex-col items-center justify-between h-full border-r border-white/10">
+    <section class="w-25 bg-light p-3 flex flex-col items-center justify-between h-full border-r border-white/5">
         <div class="flex flex-col">
             <NuxtLink to="/_/" class="m-auto"><img src="/moose.png" width="50px"></NuxtLink>
             <div class="grid grid-cols-1 gap-4 mt-5 border-t border-white/10 pt-4">

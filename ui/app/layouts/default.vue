@@ -3,6 +3,7 @@
     <NuxtLoadingIndicator />
     <div class="flex w-full h-full">
       <AppNavbar />
+      <AppList />
       <slot />
     </div>
   </section>
