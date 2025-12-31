@@ -21,6 +21,12 @@ pub fn initialize_db(conn: &Connection, create_new_db: bool) -> Result<()> {
             ["secret".to_string(), generate_uid(70)],
         )
         .unwrap();
+        conn.execute(
+            "INSERT INTO _configs (key, value) 
+            VALUES (?1, ?2)",
+            ["appname".to_string(), "MooseDB".to_string()],
+        )
+        .unwrap();
 
 
         conn.execute(
