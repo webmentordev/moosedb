@@ -13,10 +13,38 @@ use mime_guess::from_path;
 use rust_embed::RustEmbed;
 use std::time::{SystemTime, UNIX_EPOCH};
 use bcrypt::verify;
+use clap::{Parser, Subcommand};
 
 #[derive(RustEmbed)]
 #[folder = "ui/dist"]
 struct Asset;
+
+
+
+/// MooseDB CLI
+#[derive(Parser, Debug)]
+#[command(about, long_about = None)]
+struct Args {
+    #[command(subcommand)]
+    command: Option<Commands>,
+}
+
+#[derive(Subcommand, Debug)]
+enum Commands {
+    /// Start the MooseDB server
+    Serve {
+        /// Option to change the host (Optional)
+        #[arg(long, default_value = "127.0.0.1")]
+        host: String,
+
+        /// Option to change the port (Optional)
+        #[arg(long, default_value_t = 8855)]
+        port: u16,
+    },
+    /// Coming soon
+    Update,
+}
+
 
 #[derive(Serialize)]
 struct Info {
@@ -89,48 +117,61 @@ async fn static_files(req: HttpRequest) -> HttpResponse {
 
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
-    let port = 8855;
-    let mut create_new_db = false;
-    let file_exists = Path::new("database.sqlite").exists();
-    
-    if !file_exists {
-        create_new_db = true;
-    }
-    let manager = SqliteConnectionManager::file("database.sqlite");
-    let pool = Pool::new(manager).expect("Failed to create pool");
-    let conn = pool.get().expect("Failed to get connection");
-    if let Err(e) = moosedb::initialize_db(&conn, create_new_db) {
-        println!("Database could not be created: {}", e);
-        return Ok(());
-    }
+    let args = Args::parse();
 
-    let configs = moosedb::load_configs(&conn).unwrap();
-    let jwt_secret = configs.get("secret").unwrap().clone();
-    
-    println!("🚀 Listening at http://127.0.0.1:{}", port);
-    
-    HttpServer::new(move || {
-        let auth = HttpAuthentication::bearer(validator);
-        App::new()
-            .app_data(web::Data::new(AppData { 
-                database: pool.clone(),
-                jwt_secret: jwt_secret.clone(),
-                configs: configs.clone()
-            }))
-            .wrap(middleware::Logger::default())
-            .service(index)
-            .route("/auth/login", web::post().to(login))
-            .service(
-                web::scope("/admin/api")
-                    .wrap(auth.clone())
-                    .service(get_version)
-            )
-            .service(web::scope("/api").service(get_version))
-            .default_service(web::route().to(static_files))
-    })
-    .bind(("0.0.0.0", port))?
-    .run()
-    .await
+    match args.command {
+        None => {
+            Args::parse_from(&["moosedb", "--help"]);
+            Ok(())
+        }
+        Some(Commands::Update) => {
+            println!("coming soon...");
+            Ok(())
+        }
+        Some(Commands::Serve { host, port }) => {
+            let mut create_new_db = false;
+            let file_exists = Path::new("database.sqlite").exists();
+            
+            if !file_exists {
+                create_new_db = true;
+            }
+            let manager = SqliteConnectionManager::file("database.sqlite");
+            let pool = Pool::new(manager).expect("Failed to create pool");
+            let conn = pool.get().expect("Failed to get connection");
+            if let Err(e) = moosedb::initialize_db(&conn, create_new_db) {
+                println!("Database could not be created: {}", e);
+                return Ok(());
+            }
+
+            let configs = moosedb::load_configs(&conn).unwrap();
+            let jwt_secret = configs.get("secret").unwrap().clone();
+            
+            println!("🚀 Listening at http://{}:{}", host, port);
+            
+            HttpServer::new(move || {
+                let auth = HttpAuthentication::bearer(validator);
+                App::new()
+                    .app_data(web::Data::new(AppData { 
+                        database: pool.clone(),
+                        jwt_secret: jwt_secret.clone(),
+                        configs: configs.clone()
+                    }))
+                    .wrap(middleware::Logger::default())
+                    .service(index)
+                    .route("/auth/login", web::post().to(login))
+                    .service(
+                        web::scope("/admin/api")
+                            .wrap(auth.clone())
+                            .service(get_version)
+                    )
+                    .service(web::scope("/api").service(get_version))
+                    .default_service(web::route().to(static_files))
+            })
+            .bind((host, port))?
+            .run()
+            .await
+        }
+    }
 }
 
 
