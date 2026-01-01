@@ -1,4 +1,4 @@
-use rusqlite::{Connection, Result};
+use rusqlite::{Connection, Result, params, Error};
 use bcrypt::{DEFAULT_COST, hash};
 use crate::utils::random::generate_uid;
 use std::collections::HashMap;
@@ -67,4 +67,34 @@ pub fn load_configs(conn: &Connection) -> Result<HashMap<String, String>> {
     }
     
     Ok(configs)
+}
+
+
+pub fn update_super_user(email: String, new_password: String) -> Result<()> {
+    let conn = Connection::open("database.sqlite")?;
+
+    let exists: bool = conn.query_row(
+        "SELECT EXISTS(SELECT 1 FROM _super_admins WHERE email = ?1)",
+        params![email],
+        |row| row.get(0),
+    )?;
+
+    if !exists {
+        println!("Super admin with email '{}' not found.", email);
+        return Ok(());
+    }
+
+    let hashed_password =  hash(new_password, DEFAULT_COST).unwrap();
+    let updated = conn.execute(
+        "UPDATE _super_admins SET password = ?1 WHERE email = ?2",
+        params![hashed_password, email],
+    )?;
+
+    if updated != 1 {
+        eprintln!("Unexpected: {} rows updated", updated);
+    } else {
+        println!("Password updated successfully.");
+    }
+
+    Ok(())
 }

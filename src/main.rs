@@ -41,8 +41,16 @@ enum Commands {
         #[arg(long, default_value_t = 8855)]
         port: u16,
     },
-    /// Coming soon
-    Update,
+    /// Update super admin credientials
+    Upsuper{
+        /// Email of the super admin (Required)
+        #[arg(long = "email", short = 'e', required = true, value_name = "EMAIL")]
+        email: String,
+
+        /// New password of the super admin (Required)
+        #[arg(long = "password", short = 'p', required = true, value_name = "PASSWORD")]
+        password: String,
+    },
 }
 
 
@@ -124,8 +132,11 @@ async fn main() -> std::io::Result<()> {
             Args::parse_from(&["moosedb", "--help"]);
             Ok(())
         }
-        Some(Commands::Update) => {
-            println!("coming soon...");
+        Some(Commands::Upsuper { email, password}) => {
+            match moosedb::update_super_user(email, password) {
+                Ok(_) => println!("Super admin's password has been updated!"),
+                Err(_) => println!("Password update failed!")
+            }
             Ok(())
         }
         Some(Commands::Serve { host, port }) => {
