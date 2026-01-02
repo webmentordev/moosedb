@@ -97,6 +97,18 @@ struct ErrorResponse {
     message: String,
 }
 
+
+#[derive(Deserialize)]
+struct GetSetting {
+    key: String
+}
+
+#[derive(Serialize)]
+struct SendSetting {
+    success: bool,
+    value: String
+}
+
 type DbPool = Pool<SqliteConnectionManager>;
 struct AppData {
     database: DbPool,
@@ -174,6 +186,7 @@ async fn main() -> std::io::Result<()> {
                         web::scope("/admin/api")
                             .wrap(auth.clone())
                             .service(get_version)
+                            .service(get_setting)
                     )
                     .service(web::scope("/api").service(get_version))
                     .default_service(web::route().to(static_files))
@@ -219,6 +232,26 @@ async fn get_version() -> Result<impl Responder> {
     }))
 }
 
+#[post("/get-setting")]
+async fn get_setting(
+    data: web::Data<AppData>,
+    request: web::Json<GetSetting>
+) -> Result<impl Responder> {
+    match data.configs.get(&request.key) {
+        Some(value) => {
+            Ok(web::Json(SendSetting {
+                success: true,
+                value: value.clone()
+            }))
+        }
+        None => {
+            Ok(web::Json(SendSetting {
+                success: false,
+                value: String::new()
+            }))
+        }
+    }
+}
 
 async fn login(
     data: web::Data<AppData>,
