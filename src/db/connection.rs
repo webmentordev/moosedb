@@ -1,4 +1,4 @@
-use rusqlite::{Connection, Result, params, Error};
+use rusqlite::{Connection, Result, params};
 use bcrypt::{DEFAULT_COST, hash};
 use crate::utils::random::generate_uid;
 use std::collections::HashMap;
@@ -92,9 +92,22 @@ pub fn update_super_user(email: String, new_password: String) -> Result<()> {
 
     if updated != 1 {
         eprintln!("Unexpected: {} rows updated", updated);
-    } else {
-        println!("Password updated successfully.");
     }
 
+    Ok(())
+}
+
+
+pub fn update_setting(key: String, new_value: String) -> Result<()> {
+    let conn = Connection::open("database.sqlite")?;
+
+    let updated = conn.execute(
+        "UPDATE _configs SET value = ?1 WHERE key = ?2",
+        params![new_value, key],
+    )?;
+
+    if updated != 1 {
+        eprintln!("Unexpected: {} rows updated", updated);
+    }
     Ok(())
 }

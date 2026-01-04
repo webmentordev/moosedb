@@ -14,6 +14,7 @@ use rust_embed::RustEmbed;
 use std::time::{SystemTime, UNIX_EPOCH};
 use bcrypt::verify;
 use clap::{Parser, Subcommand};
+use std::sync::{RwLock, Arc};
 
 #[derive(RustEmbed)]
 #[folder = "ui/dist"]
@@ -109,11 +110,24 @@ struct SendSetting {
     value: String
 }
 
+#[derive(Deserialize)]
+struct UpdateSetting {
+    key: String,
+    value: String
+}
+
+#[derive(Serialize)]
+struct Response {
+    success: bool,
+    message: String
+}
+
+
 type DbPool = Pool<SqliteConnectionManager>;
 struct AppData {
     database: DbPool,
     jwt_secret: String,
-    configs: HashMap<String, String>
+    configs: Arc<RwLock<HashMap<String, String>>>,
 }
 
 async fn static_files(req: HttpRequest) -> HttpResponse {
@@ -166,8 +180,8 @@ async fn main() -> std::io::Result<()> {
                 return Ok(());
             }
 
-            let configs = moosedb::load_configs(&conn).unwrap();
-            let jwt_secret = configs.get("secret").unwrap().clone();
+            let configs = Arc::new(RwLock::new(moosedb::load_configs(&conn).unwrap()));
+            let jwt_secret = configs.read().unwrap().get("secret").unwrap().clone();
             
             println!("🚀 Listening at http://{}:{}", host, port);
             
@@ -187,6 +201,7 @@ async fn main() -> std::io::Result<()> {
                             .wrap(auth.clone())
                             .service(get_version)
                             .service(get_setting)
+                            .service(update_setting)
                     )
                     .service(web::scope("/api").service(get_version))
                     .default_service(web::route().to(static_files))
@@ -237,7 +252,8 @@ async fn get_setting(
     data: web::Data<AppData>,
     request: web::Json<GetSetting>
 ) -> Result<impl Responder> {
-    match data.configs.get(&request.key) {
+    let configs = data.configs.read().unwrap();
+    match configs.get(&request.key) {
         Some(value) => {
             Ok(web::Json(SendSetting {
                 success: true,
@@ -252,6 +268,31 @@ async fn get_setting(
         }
     }
 }
+
+#[post("/update-setting")]
+async fn update_setting(
+    data: web::Data<AppData>,
+    request: web::Json<UpdateSetting>
+) -> Result<impl Responder> {
+    match moosedb::update_setting(request.key.to_string(), request.value.to_string()) {
+        Ok(_) => {
+            let mut configs = data.configs.write().unwrap();
+            configs.insert(request.key.to_string(), request.value.to_string());
+            
+            Ok(web::Json(Response {
+                success: true,
+                message: "Setting updated successfully".to_string()
+            }))
+        }
+        Err(err) => {
+            Ok(web::Json(Response {
+                success: false,
+                message: err.to_string()
+            }))
+        }
+    }
+}
+
 
 async fn login(
     data: web::Data<AppData>,

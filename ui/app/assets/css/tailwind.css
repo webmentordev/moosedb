@@ -24,6 +24,10 @@ p{
   @apply text-para-light;
 }
 
+
+.error{
+  @apply text-red-500;
+}
 button, a{
   @apply cursor-pointer;
 }
