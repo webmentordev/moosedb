@@ -10,12 +10,14 @@
                         <AlertsAlertError v-if="errors.name" error="Email field is required" />
                     </div>
 
-                    <button class="flex items-center justify-center py-2 px-3 border rounded-xl mt-4 bg-main w-full">
-                        + fields
+                    <button class="flex items-center justify-center py-2 px-3 border rounded-xl mt-4 bg-main w-full" @click="dropdown = !dropdown">
+                        + add new fields
                     </button>
-                    <div class="p-3 bg-dark rounded-lg mt-4 grid grid-cols-3 gap-3">
+                    <div class="p-3 bg-dark rounded-lg mt-4 grid grid-cols-3 gap-3" v-show="dropdown">
                         <button @click="add_to_array('{{ column.id }}')" v-for="column in columns" class="bg-light rounded-lg py-2 px-3 border border-white/10">{{ column.name }}</button>
                     </div>
+                    <div class="full-separator"></div>
+                    <p class="mt-2 text-sm"><code>id (auto increment)</code>, <code>created_at</code> and <code>updated_at</code> will be auto generated.</p>
                 </div>
             </div>
         </div>
@@ -24,6 +26,7 @@
 
 <script setup lang="js">
     const name = ref("");
+    const dropdown = ref(false);
     const errors = ref({
         name: null,
         count: 0

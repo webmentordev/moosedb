@@ -1,5 +1,5 @@
 <template>
-    <label class="text-gray-400">{{ text }}</label>
+    <label class="text-gray-400 mb-1">{{ text }}</label>
 </template>
 <script setup>
     defineProps({

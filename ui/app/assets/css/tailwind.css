@@ -5,7 +5,7 @@
   --color-dark: #17181c;
   --color-light: #1a1c20;
   --color-para: #3f4145;
-  --color-para-light: #505257;
+  --color-para-light: #616369;
   --color-input: #201f24;
   --color-main: #ef9143;
 }
@@ -34,4 +34,12 @@ button, a{
 
 .router-link-active, .router-link-exact-active{
   @apply border-main;
+}
+
+code{
+  @apply inline-block py-px px-2 bg-main/5 text-white font-semibold rounded-lg;
+}
+
+.full-separator{
+  @apply h-px bg-white/10 w-full my-6;
 }
