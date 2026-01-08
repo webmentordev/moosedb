@@ -1,5 +1,6 @@
 <template>
     <section class="w-55 bg-light p-3 flex flex-col h-full border-r border-white/5">
+        <AppCreateCollection />
         <AppInput placeholder="Search collection..." />
         <div class="grid grid-cols-1 gap-3 my-3 py-3 border-y border-white/5">
             <AppLink v-for="item in collections" :link="item.link" :title="item.title" />
