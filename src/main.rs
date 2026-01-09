@@ -1,5 +1,5 @@
 
-use actix_web::{get, post, web, App, HttpServer, HttpResponse, HttpRequest, HttpMessage, Result, Responder, middleware};
+use actix_web::{get, post, web, App, HttpServer, HttpResponse, HttpRequest, HttpMessage, Result, Responder, middleware, Error};
 use actix_web::dev::ServiceRequest;
 use actix_web_httpauth::extractors::bearer::BearerAuth;
 use actix_web_httpauth::middleware::HttpAuthentication;
@@ -202,6 +202,7 @@ async fn main() -> std::io::Result<()> {
                             .service(get_version)
                             .service(get_setting)
                             .service(update_setting)
+                            .service(create_collection)
                     )
                     .service(web::scope("/api").service(get_version))
                     .default_service(web::route().to(static_files))
@@ -290,6 +291,175 @@ async fn update_setting(
                 message: err.to_string()
             }))
         }
+    }
+}
+
+
+#[derive(Deserialize, Serialize, Debug)]
+struct CollectionRequest {
+    collection: String,
+    fields: Vec<CollectionFields>,
+}
+
+#[derive(Deserialize, Serialize, Debug)]
+struct CollectionFields {
+    title: String,
+    #[serde(rename = "type")]
+    field_type: String,
+    unique: bool,
+    nullable: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    min: Option<u32>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    max: Option<u32>,
+}
+
+#[post("/create-collection")]
+async fn create_collection(
+    data: web::Json<CollectionRequest>,
+    app_data: web::Data<AppData>
+) -> Result<HttpResponse, Error> {
+    if data.collection.is_empty() {
+        return Ok(HttpResponse::BadRequest().json(Response {
+            success: false,
+            message: "Collection name is required".to_string(),
+        }));
+    }
+
+    let conn = match app_data.database.get() {
+        Ok(conn) => conn,
+        Err(err) => {
+            return Ok(HttpResponse::InternalServerError().json(Response {
+                success: false,
+                message: format!("Failed to get database connection: {}", err),
+            }));
+        }
+    };
+
+    let table_exists: Result<i64, _> = conn.query_row(
+        "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name=?",
+        [&data.collection],
+        |row| row.get(0),
+    );
+
+    if let Ok(count) = table_exists {
+        if count > 0 {
+            return Ok(HttpResponse::BadRequest().json(Response {
+                success: false,
+                message: format!("Collection {} already exists!", &data.collection),
+            }));
+        }
+    }
+
+    let mut create_table_sql = format!(
+        "CREATE TABLE {} (id INTEGER PRIMARY KEY AUTOINCREMENT",
+        data.collection
+    );
+
+    for field in &data.fields {
+        let mut field_def = format!(
+            ", {} {}",
+            field.title,
+            sql_type_from_field_type(&field.field_type)
+        );
+
+        if !field.nullable {
+            field_def.push_str(" NOT NULL");
+        }
+        if field.unique {
+            field_def.push_str(" UNIQUE");
+        }
+
+        if let Some(min) = field.min {
+            if field.field_type == "VARCHAR" || field.field_type == "TEXT" {
+                field_def.push_str(&format!(" CHECK(length({}) >= {})", field.title, min));
+            } else if field.field_type == "INTEGER" || field.field_type == "FLOAT" {
+                field_def.push_str(&format!(" CHECK({} >= {})", field.title, min));
+            }
+        }
+
+        if let Some(max) = field.max {
+            if field.field_type == "VARCHAR" || field.field_type == "TEXT" {
+                field_def.push_str(&format!(" CHECK(length({}) <= {})", field.title, max));
+            } else if field.field_type == "INTEGER" || field.field_type == "FLOAT" {
+                field_def.push_str(&format!(" CHECK({} <= {})", field.title, max));
+            }
+        }
+
+        create_table_sql.push_str(&field_def);
+    }
+
+    create_table_sql.push_str(")");
+
+    if let Err(err) = conn.execute(&create_table_sql, []) {
+        return Ok(HttpResponse::InternalServerError().json(Response {
+            success: false,
+            message: format!("Failed to create table: {}", err),
+        }));
+    }
+
+    let metadata_table = format!("{}_metadata", data.collection);
+    let create_metadata_sql = format!(
+        "CREATE TABLE {} (
+            field_name TEXT PRIMARY KEY,
+            field_type TEXT NOT NULL,
+            unique_field BOOLEAN NOT NULL,
+            nullable BOOLEAN NOT NULL,
+            min INTEGER,
+            max INTEGER
+        )",
+        metadata_table
+    );
+
+    if let Err(err) = conn.execute(&create_metadata_sql, []) {
+        return Ok(HttpResponse::InternalServerError().json(Response {
+            success: false,
+            message: format!("Failed to create metadata table: {}", err),
+        }));
+    }
+
+    for field in &data.fields {
+        let insert_metadata_sql = format!(
+            "INSERT INTO {} (field_name, field_type, unique_field, nullable, min, max) 
+             VALUES (?, ?, ?, ?, ?, ?)",
+            metadata_table
+        );
+
+        if let Err(err) = conn.execute(
+            &insert_metadata_sql,
+            rusqlite::params![
+                field.title,
+                field.field_type,
+                field.unique,
+                field.nullable,
+                field.min,
+                field.max
+            ],
+        ) {
+            return Ok(HttpResponse::InternalServerError().json(Response {
+                success: false,
+                message: format!("Failed to save field metadata: {}", err),
+            }));
+        }
+    }
+
+    Ok(HttpResponse::Ok().json(Response {
+        success: true,
+        message: format!("Collection {} has been created!", &data.collection),
+    }))
+}
+
+fn sql_type_from_field_type(field_type: &str) -> &str {
+    match field_type {
+        "VARCHAR" => "TEXT",
+        "TEXT" => "TEXT",
+        "STRING" => "TEXT",
+        "INTEGER" => "INTEGER",
+        "DECIMAL" => "REAL",
+        "BOOLEAN" => "INTEGER",
+        "DATETIME" => "TEXT",
+        "TIMESTAMP" => "TEXT",
+        _ => "TEXT",
     }
 }
 
