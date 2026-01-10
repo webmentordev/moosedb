@@ -1,3 +1,5 @@
+This file is just to keep track of progress and new features to add
+
 --------------------
 # Improvements
 --------------------
@@ -12,6 +14,7 @@ X create default token validation middleware
 X create composables for API calls
 X create composables for token validation
 X create guest auth for login page
+- add rish text editor
 
 
 
@@ -21,12 +24,12 @@ X create guest auth for login page
 - create session validation system like Laravel
 - create logs database
 - add cli commands parsing
-    - create serve command
-    - create update password command
-    - add command to change port
+    X create serve command
+    X create update password command
+    X add command to change port
 - fill default configurations
     X default hash for encryption
-    - use default token created in the DB
+    X use default token created in the DB
 - create token validation api
 - secure login routes
     - create api for login
@@ -39,4 +42,8 @@ X create guest auth for login page
     - add html and css template customization for Email
     - sign one-time url for password reset
     - Add default forgot password
-(This file is just to keep track of progress and new features to add)
+
+------------------------------------------------------------
+Critical Errors
+------------------------------------------------------------
+- Fix column types in Frontend and backend

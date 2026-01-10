@@ -18,9 +18,9 @@
 </template>
 
 <script setup>
-    // definePageMeta({
-    //     middleware: 'auth'
-    // });
+    definePageMeta({
+        middleware: 'auth'
+    });
     const version = ref(null);
     // const { removeToken } = useAuthToken();
     // const { authFetch } = useAuthFetch();
