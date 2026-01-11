@@ -1,3 +1,7 @@
+# Build Instructions
+
+This project requires the latest versions of Node.js and Rust. Once installed, execute the `start.sh` script to build and run the application.
+
 # 🚧 Under Development
 
 > ⚠️ Do not use this system yet. It is still under active development.
