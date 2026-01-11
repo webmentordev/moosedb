@@ -1,6 +1,14 @@
 # Build Instructions
 
-This project requires the latest versions of Node.js and Rust. Once installed, execute the `start.sh` script to build and run the application.
+This project requires the latest versions of Node.js and Rust.
+
+## Development Mode
+
+Execute the `start.sh` script to run the application in development mode.
+
+## Production Build
+
+Execute the `build.sh` script to build the project for release. This will create a binary file with the backend (Actix) and frontend (Nuxt's dist folder) embedded into it, which can then be run as a standalone application.
 
 # 🚧 Under Development
 
