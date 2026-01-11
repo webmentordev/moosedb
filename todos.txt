@@ -32,8 +32,8 @@ X create guest auth for login page
     X use default token created in the DB
 - create token validation api
 - secure login routes
-    - create api for login
-    - create api for signout
+    X create api for login
+    X create api for signout
 - secure super admin routes
     - create api for updating password from dashboard
     - create cli command for updating password
@@ -46,4 +46,4 @@ X create guest auth for login page
 ------------------------------------------------------------
 Critical Errors
 ------------------------------------------------------------
-- Fix column types in Frontend and backend
+X Fix column types in Frontend and backend

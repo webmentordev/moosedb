@@ -15,6 +15,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use bcrypt::verify;
 use clap::{Parser, Subcommand};
 use std::sync::{RwLock, Arc};
+use moosedb::random_numbers;
 
 #[derive(RustEmbed)]
 #[folder = "ui/dist"]
@@ -203,6 +204,7 @@ async fn main() -> std::io::Result<()> {
                             .service(get_setting)
                             .service(update_setting)
                             .service(create_collection)
+                            .service(get_collections)
                     )
                     .service(web::scope("/api").service(get_version))
                     .default_service(web::route().to(static_files))
@@ -295,6 +297,65 @@ async fn update_setting(
 }
 
 
+#[get("/collections")]
+async fn get_collections(
+    app_data: web::Data<AppData>,
+) -> Result<HttpResponse, Error> {
+    let conn = match app_data.database.get() {
+        Ok(conn) => conn,
+        Err(err) => {
+            return Ok(HttpResponse::InternalServerError().json(Response {
+                success: false,
+                message: format!("Failed to get database connection: {}", err),
+            }));
+        }
+    };
+    let metadata_exists: Result<i64, _> = conn.query_row(
+        "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='_database_metadata'",
+        [],
+        |row| row.get(0),
+    );
+    if let Ok(0) = metadata_exists {
+        return Ok(HttpResponse::Ok().json(serde_json::json!({
+            "success": true,
+            "collections": []
+        })));
+    }
+    let mut stmt = match conn.prepare("SELECT DISTINCT table_id, table_name FROM _database_metadata") {
+        Ok(stmt) => stmt,
+        Err(err) => {
+            return Ok(HttpResponse::InternalServerError().json(Response {
+                success: false,
+                message: format!("Failed to prepare query: {}", err),
+            }));
+        }
+    };
+    let collections: Result<Vec<serde_json::Value>, _> = stmt
+        .query_map([], |row| {
+            Ok(serde_json::json!({
+                "table_id": row.get::<_, String>(0)?,
+                "table_name": row.get::<_, String>(1)?
+            }))
+        })
+        .and_then(|mapped_rows| mapped_rows.collect());
+    match collections {
+        Ok(collections) => {
+            Ok(HttpResponse::Ok().json(serde_json::json!({
+                "success": true,
+                "collections": collections
+            })))
+        }
+        Err(err) => {
+            Ok(HttpResponse::InternalServerError().json(Response {
+                success: false,
+                message: format!("Failed to fetch collections: {}", err),
+            }))
+        }
+    }
+}
+
+
+
 #[derive(Deserialize, Serialize, Debug)]
 struct CollectionRequest {
     collection: String,
@@ -351,14 +412,43 @@ async fn create_collection(
         }
     }
 
+    let metadata_exists: Result<i64, _> = conn.query_row(
+        "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='_database_metadata'",
+        [],
+        |row| row.get(0),
+    );
+
+    if let Ok(0) = metadata_exists {
+        let create_metadata_table_sql = "CREATE TABLE _database_metadata (
+            table_id TEXT NOT NULL,
+            table_name TEXT NOT NULL,
+            field_name TEXT NOT NULL,
+            field_type TEXT NOT NULL,
+            unique_field BOOLEAN NOT NULL,
+            nullable BOOLEAN NOT NULL,
+            min INTEGER,
+            max INTEGER,
+            PRIMARY KEY (table_name, field_name)
+        )";
+
+        if let Err(err) = conn.execute(create_metadata_table_sql, []) {
+            return Ok(HttpResponse::InternalServerError().json(Response {
+                success: false,
+                message: format!("Failed to create metadata table: {}", err),
+            }));
+        }
+    }
+
+    let table_id = format!("moo_{}", random_numbers(9));
+
     let mut create_table_sql = format!(
-        "CREATE TABLE {} (id INTEGER PRIMARY KEY AUTOINCREMENT",
+        "CREATE TABLE \"{}\" (id INTEGER PRIMARY KEY AUTOINCREMENT",
         data.collection
     );
 
     for field in &data.fields {
         let mut field_def = format!(
-            ", {} {}",
+            ", \"{}\" {}",
             field.title,
             sql_type_from_field_type(&field.field_type)
         );
@@ -372,17 +462,17 @@ async fn create_collection(
 
         if let Some(min) = field.min {
             if field.field_type == "VARCHAR" || field.field_type == "TEXT" {
-                field_def.push_str(&format!(" CHECK(length({}) >= {})", field.title, min));
+                field_def.push_str(&format!(" CHECK(length(\"{}\") >= {})", field.title, min));
             } else if field.field_type == "INTEGER" || field.field_type == "FLOAT" {
-                field_def.push_str(&format!(" CHECK({} >= {})", field.title, min));
+                field_def.push_str(&format!(" CHECK(\"{}\") >= {})", field.title, min));
             }
         }
 
         if let Some(max) = field.max {
             if field.field_type == "VARCHAR" || field.field_type == "TEXT" {
-                field_def.push_str(&format!(" CHECK(length({}) <= {})", field.title, max));
+                field_def.push_str(&format!(" CHECK(length(\"{}\") <= {})", field.title, max));
             } else if field.field_type == "INTEGER" || field.field_type == "FLOAT" {
-                field_def.push_str(&format!(" CHECK({} <= {})", field.title, max));
+                field_def.push_str(&format!(" CHECK(\"{}\") <= {})", field.title, max));
             }
         }
 
@@ -398,36 +488,15 @@ async fn create_collection(
         }));
     }
 
-    let metadata_table = format!("{}_metadata", data.collection);
-    let create_metadata_sql = format!(
-        "CREATE TABLE {} (
-            field_name TEXT PRIMARY KEY,
-            field_type TEXT NOT NULL,
-            unique_field BOOLEAN NOT NULL,
-            nullable BOOLEAN NOT NULL,
-            min INTEGER,
-            max INTEGER
-        )",
-        metadata_table
-    );
-
-    if let Err(err) = conn.execute(&create_metadata_sql, []) {
-        return Ok(HttpResponse::InternalServerError().json(Response {
-            success: false,
-            message: format!("Failed to create metadata table: {}", err),
-        }));
-    }
-
     for field in &data.fields {
-        let insert_metadata_sql = format!(
-            "INSERT INTO {} (field_name, field_type, unique_field, nullable, min, max) 
-             VALUES (?, ?, ?, ?, ?, ?)",
-            metadata_table
-        );
+        let insert_metadata_sql = "INSERT INTO _database_metadata (table_id, table_name, field_name, field_type, unique_field, nullable, min, max) 
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?)";
 
         if let Err(err) = conn.execute(
-            &insert_metadata_sql,
+            insert_metadata_sql,
             rusqlite::params![
+                table_id,
+                data.collection,
                 field.title,
                 field.field_type,
                 field.unique,
@@ -451,9 +520,8 @@ async fn create_collection(
 
 fn sql_type_from_field_type(field_type: &str) -> &str {
     match field_type {
-        "VARCHAR" => "TEXT",
+        "VARCHAR" => "VARCHAR",
         "TEXT" => "TEXT",
-        "STRING" => "TEXT",
         "INTEGER" => "INTEGER",
         "DECIMAL" => "REAL",
         "BOOLEAN" => "INTEGER",
@@ -462,7 +530,6 @@ fn sql_type_from_field_type(field_type: &str) -> &str {
         _ => "TEXT",
     }
 }
-
 
 async fn login(
     data: web::Data<AppData>,
