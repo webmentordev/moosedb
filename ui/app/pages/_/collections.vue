@@ -1,41 +1,45 @@
 <template>
-    <div class="w-full h-full p-4">
-        <h1>Collections Dashboard</h1>
-        <div v-if="version" class="grid grid-cols-4 gap-3">
-            <ul class="text-white">
-                <li>MooseDB - {{ version.version }}</li>
-                <li>Actix Web -{{ version.actix_web }}</li>
-                <li>Actix File - {{ version.actix_files }}</li>
-                <li>Rustqlite - {{ version.rusqlite }}</li>
-                <li>Serde - {{ version.serde }}</li>
-                <li>Serde Json - {{ version.serde_json }}</li>
-                <li>Rust Embed - {{ version.rust_embed }}</li>
-                <li>Mime Guess - {{ version.mime_guess }}</li>
-            </ul>
+    <div class="w-full h-full flex">
+        <AppList :collections="collections" :active="active_tb" />
+        <AlertsError v-if="errors.message" :message="errors.message" />
+        <div class="p-3">
+            <h1 class="text-lg">Collections</h1>
         </div>
-        <button @click="logout">Loogut</button>
     </div>
 </template>
 
 <script setup>
+    const { authFetch } = useAuthFetch();
     definePageMeta({
         middleware: 'auth'
     });
-    const version = ref(null);
-    // const { removeToken } = useAuthToken();
-    // const { authFetch } = useAuthFetch();
+    const errors = ref({
+        message: null,
+        count: 0
+    });
+    const collections = ref([]);
+    const route = useRoute();
+    const active_tb = ref(null);
+    if(route.query.tb){
+        active_tb.value = route.query.tb;
+    }
+    watch(() => route.query.tb, (newTb) => {
+        active_tb.value = newTb || null;
+        console.log(active_tb.value);
+    });
 
-    // try {
-    //     const data = await authFetch('/admin/api/get-version', {
-    //         method: "POST"
-    //     });
-    //     version.value = data;
-    // } catch (error) {
-    //     console.error('Failed to fetch:', error);
-    // }
-
-    // async function logout() {
-    //     removeToken();
-    //     await navigateTo('/_/auth/login');
-    // }
+    try{
+        const response = await authFetch('/admin/api/collections');
+        if(response.success){
+            if(response.collections.length > 0){
+                collections.value = response.collections;
+                active_tb.value = response.collections[0].table_id;
+                console.log(collections.value);
+            }
+        }else{
+            errors.value.message = response.message;
+        }
+    }catch(error){
+        errors.value.message = error.data.message;
+    }
 </script>
