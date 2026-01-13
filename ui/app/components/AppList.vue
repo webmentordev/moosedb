@@ -3,7 +3,7 @@
         <AppCreateCollection v-model:show="show" />
         <AppInput placeholder="Search collection..." />
         <div class="grid grid-cols-1 gap-3 my-3 py-3 border-y border-white/5" v-if="collections.length > 0">
-            <AppLink v-for="item in collections" :link='"/_/collections?tb="+item.table_id' :title="item.table_name" />
+            <AppLink v-for="item in collections" :link='"/_/collections?tb="+item.table_id' :id="item.table_id" :active="active_tb" :title="item.table_name" />
         </div>
         <p v-else class="my-4 pb-3 text-center border-b border-white/5">No collection exist</p>
 
@@ -17,19 +17,27 @@
 
 <script setup>
     const { authFetch } = useAuthFetch();
+    const route = useRoute();
     const show = ref(false);
     const errors = ref({
         message: null,
         count: 0
     });
-
     const collections = ref([]);
+    const active_tb = ref(null);
+    if(route.query.tb){
+        active_tb.value = route.query.tb;
+    }
+    watch(() => route.query.tb, (newTb) => {
+        active_tb.value = newTb || null;
+    });
+    
 
     try{
         const response = await authFetch('/admin/api/collections');
         if(response.success){
             if(response.collections.length > 0){
-                collections.value = response.collections
+                collections.value = response.collections;
                 console.log(collections.value);
             }
         }else{

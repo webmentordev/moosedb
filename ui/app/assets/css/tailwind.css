@@ -32,8 +32,8 @@ button, a{
   @apply cursor-pointer;
 }
 
-.router-link-active, .router-link-exact-active{
-  @apply border-main;
+.active-table{
+  @apply border-main
 }
 
 code{
