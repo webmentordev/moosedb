@@ -46,6 +46,8 @@ X create guest auth for login page
     - Add default forgot password
 - Dashboard collection API
     - delete the collection
+        - soft delete the collection
+        - list soft deleted collection to the admin
     - delete files when collection is deleted
     - fetch all table records in the 
     - show data in pagination
@@ -58,3 +60,4 @@ X create guest auth for login page
 Critical Errors
 ------------------------------------------------------------
 X Fix column types in Frontend and backend
+- fix the collections listing click issue

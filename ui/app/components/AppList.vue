@@ -1,6 +1,6 @@
 <template>
     <section class="w-55 bg-light p-3 flex flex-col h-full border-r border-white/5">
-        <AppCreateCollection v-model:show="show" />
+        <AppCreateCollection v-model:show="show" @fetch-data="fetch_api" />
         <AppInput placeholder="Search collection..." />
         <div class="grid grid-cols-1 gap-3 my-3 py-3 border-y border-white/5" v-if="collections.length > 0">
             <AppLink v-for="item in collections" :link='"/_/collections?tb="+item.table_id' :id="item.table_id" :active="active" :title="item.table_name" />
@@ -23,5 +23,10 @@
             Array
         }
     })
+    const emit = defineEmits(['refetch-api'])
     const show = ref(false);
+
+    function fetch_api(){
+        emit("refetch-api", true);
+    }
 </script>

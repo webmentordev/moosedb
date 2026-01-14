@@ -124,6 +124,12 @@ struct Response {
 }
 
 
+#[derive(Deserialize)]
+struct CollectionID {
+    collection_id: String
+}
+
+
 type DbPool = Pool<SqliteConnectionManager>;
 struct AppData {
     database: DbPool,
@@ -205,6 +211,7 @@ async fn main() -> std::io::Result<()> {
                             .service(update_setting)
                             .service(create_collection)
                             .service(get_collections)
+                            .service(delete_collection)
                     )
                     .service(web::scope("/api").service(get_version))
                     .default_service(web::route().to(static_files))
@@ -295,6 +302,76 @@ async fn update_setting(
         }
     }
 }
+
+#[post("/delete-collection")]
+async fn delete_collection(
+    data: web::Data<AppData>,
+    request: web::Json<CollectionID>
+) -> Result<impl Responder> {
+    let collection_id = request.collection_id.clone();
+    
+    let conn = match data.database.get() {
+        Ok(conn) => conn,
+        Err(err) => {
+            return Ok(HttpResponse::InternalServerError().json(Response {
+                success: false,
+                message: format!("Failed to get database connection: {}", err),
+            }));
+        }
+    };
+    let metadata_exists: Result<i64, _> = conn.query_row(
+        "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='_database_metadata'",
+        [],
+        |row| row.get(0),
+    );
+    
+    if let Ok(0) = metadata_exists {
+        return Ok(HttpResponse::NotFound().json(Response {
+            success: false,
+            message: "Metadata table does not exist".to_string(),
+        }));
+    }
+    let table_name: Result<String, _> = conn.query_row(
+        "SELECT table_name FROM _database_metadata WHERE table_id = ?1 LIMIT 1",
+        [&collection_id],
+        |row| row.get(0),
+    );
+    let table_name = match table_name {
+        Ok(name) => name,
+        Err(rusqlite::Error::QueryReturnedNoRows) => {
+            return Ok(HttpResponse::NotFound().json(Response {
+                success: false,
+                message: format!("Collection with id '{}' not found", collection_id),
+            }));
+        }
+        Err(err) => {
+            return Ok(HttpResponse::InternalServerError().json(Response {
+                success: false,
+                message: format!("Failed to query collection: {}", err),
+            }));
+        }
+    };
+    if let Err(err) = conn.execute(&format!("DROP TABLE IF EXISTS \"{}\"", table_name), []) {
+        return Ok(HttpResponse::InternalServerError().json(Response {
+            success: false,
+            message: format!("Failed to drop table: {}", err),
+        }));
+    }
+    if let Err(err) = conn.execute(
+        "DELETE FROM _database_metadata WHERE table_id = ?1",
+        [&collection_id],
+    ) {
+        return Ok(HttpResponse::InternalServerError().json(Response {
+            success: false,
+            message: format!("Failed to delete from metadata: {}", err),
+        }));
+    }
+    Ok(HttpResponse::Ok().json(Response {
+        success: true,
+        message: format!("Collection '{}' deleted successfully", table_name),
+    }))
+}
+
 
 
 #[get("/collections")]

@@ -130,7 +130,7 @@
             default: false
         }
     });
-    const emit = defineEmits(['update:show']);
+    const emit = defineEmits(['update:show', 'fetch-data']);
     function closeModal() {
         emit('update:show', false);
     }
@@ -271,6 +271,7 @@
                     text: data.message,
                     success: true
                 };
+                emit('fetch-data', true);
                 setTimeout(() => {
                     name.value = "";
                     fields.value = [];
