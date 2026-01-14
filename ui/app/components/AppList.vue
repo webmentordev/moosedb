@@ -3,7 +3,7 @@
         <AppCreateCollection v-model:show="show" @fetch-data="fetch_api" />
         <AppInput placeholder="Search collection..." />
         <div class="grid grid-cols-1 gap-3 my-3 py-3 border-y border-white/5" v-if="collections.length > 0">
-            <AppLink v-for="item in collections" :link='"/_/collections?tb="+item.table_id' :id="item.table_id" :active="active" :title="item.table_name" />
+            <AppLink v-for="item in collections" :link='"/_/collections?tb="+item.table_id' :key="item.table_id" :id="item.table_id" :active="active" :title="item.table_name" />
         </div>
         <p v-else class="my-4 pb-3 text-center border-b border-white/5">No collection exist</p>
         <button class="text-gray-300 flex items-center py-2 px-3 border border-white rounded-xl" @click="show = true">

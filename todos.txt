@@ -60,4 +60,4 @@ X create guest auth for login page
 Critical Errors
 ------------------------------------------------------------
 X Fix column types in Frontend and backend
-- fix the collections listing click issue
+x fix the collections listing click issue
