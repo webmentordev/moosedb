@@ -50,9 +50,13 @@
     const active_tb_name = ref(null);
     if(route.query.tb){
         active_tb.value = route.query.tb;
+        get_collection(active_tb.value);
     }
     watch(() => route.query.tb, (newTb) => {
         active_tb.value = newTb || null;
+        if(active_tb.value){
+            get_collection(active_tb.value)
+        }
         const value = collections.value.find(item => item.table_id == active_tb.value);
         active_tb_name.value = value.table_name;
     });
@@ -65,8 +69,10 @@
             if(response.success){
                 if(response.collections.length > 0){
                     collections.value = response.collections;
-                    active_tb.value = response.collections[0].table_id;
-                    active_tb_name.value = response.collections[0].table_name;
+                    if(!active_tb.value){
+                        active_tb.value = response.collections[0].table_id;
+                        active_tb_name.value = response.collections[0].table_name;
+                    }
                     console.log(collections.value);
                 }
             }else{
@@ -100,6 +106,25 @@
             show.value = false;
         }
     }
+
+    async function get_collection(table_id){
+        try{
+            const response = await authFetch('/admin/api/get-collection-records', {
+                method: "POST",
+                body: {
+                    collection_id: table_id
+                }
+            });
+            if(response.success){
+                console.log(response.records);
+            } else {
+                errors.value.message = response.message;
+            }
+        }catch(error){
+            errors.value.message = error.data.message;
+        }
+    }
+
 
     function resetValues(){
         success_message.value = null;

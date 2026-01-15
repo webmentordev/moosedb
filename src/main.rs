@@ -129,6 +129,13 @@ struct CollectionID {
     collection_id: String
 }
 
+#[derive(Serialize, Deserialize)]
+struct CollectionRecords {
+    success: bool,
+    message: String,
+    records: Option<Vec<serde_json::Value>>
+}
+
 
 type DbPool = Pool<SqliteConnectionManager>;
 struct AppData {
@@ -212,6 +219,7 @@ async fn main() -> std::io::Result<()> {
                             .service(create_collection)
                             .service(get_collections)
                             .service(delete_collection)
+                            .service(get_collection_records)
                     )
                     .service(web::scope("/api").service(get_version))
                     .default_service(web::route().to(static_files))
@@ -302,6 +310,114 @@ async fn update_setting(
         }
     }
 }
+
+
+#[post("/get-collection-records")]
+async fn get_collection_records(
+    data: web::Data<AppData>,
+    request: web::Json<CollectionID>
+) -> Result<impl Responder> {
+    let collection_id = request.collection_id.clone();
+    
+    let conn = match data.database.get() {
+        Ok(conn) => conn,
+        Err(err) => {
+            return Ok(HttpResponse::InternalServerError().json(CollectionRecords {
+                success: false,
+                message: format!("Failed to get database connection: {}", err),
+                records: None,
+            }));
+        }
+    };
+
+    let metadata_exists: Result<i64, _> = conn.query_row(
+        "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='_database_metadata'",
+        [],
+        |row| row.get(0),
+    );
+    
+    if let Ok(0) = metadata_exists {
+        return Ok(HttpResponse::NotFound().json(CollectionRecords {
+            success: false,
+            message: "Metadata table does not exist".to_string(),
+            records: None,
+        }));
+    }
+
+    let table_name: Result<String, _> = conn.query_row(
+        "SELECT table_name FROM _database_metadata WHERE table_id = ?1 LIMIT 1",
+        [&collection_id],
+        |row| row.get(0),
+    );
+
+    let table_name = match table_name {
+        Ok(name) => name,
+        Err(rusqlite::Error::QueryReturnedNoRows) => {
+            return Ok(HttpResponse::NotFound().json(CollectionRecords {
+                success: false,
+                message: format!("Collection with id '{}' not found", collection_id),
+                records: None,
+            }));
+        }
+        Err(err) => {
+            return Ok(HttpResponse::InternalServerError().json(CollectionRecords {
+                success: false,
+                message: format!("Failed to query collection: {}", err),
+                records: None,
+            }));
+        }
+    };
+
+    let mut stmt = match conn.prepare(&format!("SELECT * FROM \"{}\"", table_name)) {
+        Ok(stmt) => stmt,
+        Err(err) => {
+            return Ok(HttpResponse::InternalServerError().json(CollectionRecords {
+                success: false,
+                message: format!("Failed to prepare query: {}", err),
+                records: None,
+            }));
+        }
+    };
+
+    let column_count = stmt.column_count();
+    let column_names: Vec<String> = stmt.column_names().iter().map(|s| s.to_string()).collect();
+
+    let rows = match stmt.query_map([], |row| {
+        let mut record = serde_json::Map::new();
+        for i in 0..column_count {
+            let value: serde_json::Value = match row.get_ref(i) {
+                Ok(rusqlite::types::ValueRef::Null) => serde_json::Value::Null,
+                Ok(rusqlite::types::ValueRef::Integer(v)) => serde_json::json!(v),
+                Ok(rusqlite::types::ValueRef::Real(v)) => serde_json::json!(v),
+                Ok(rusqlite::types::ValueRef::Text(v)) => {
+                    serde_json::Value::String(String::from_utf8_lossy(v).to_string())
+                }
+                _ => serde_json::Value::Null,
+            };
+            record.insert(column_names[i].clone(), value);
+        }
+        Ok(serde_json::Value::Object(record))
+    }) {
+        Ok(rows) => rows,
+        Err(err) => {
+            return Ok(HttpResponse::InternalServerError().json(CollectionRecords {
+                success: false,
+                message: format!("Failed to query records: {}", err),
+                records: None,
+            }));
+        }
+    };
+
+    let records: Vec<serde_json::Value> = rows.filter_map(|r| r.ok()).collect();
+
+    Ok(HttpResponse::Ok().json(CollectionRecords {
+        success: true,
+        message: format!("Retrieved {} records from '{}'", records.len(), table_name),
+        records: Some(records),
+    }))
+}
+
+
 
 #[post("/delete-collection")]
 async fn delete_collection(

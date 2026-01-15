@@ -17,6 +17,7 @@ X create guest auth for login page
 - add rish text editor
 - active table indicator
 - UI to show records in the table
+- render Nuxt error page
 
 
 
@@ -49,7 +50,8 @@ X create guest auth for login page
         - soft delete the collection
         - list soft deleted collection to the admin
     - delete files when collection is deleted
-    - fetch all table records in the 
+    X fetch all table records
+    - show all records
     - show data in pagination
 - Public collection API
     - send data in json from
