@@ -14,7 +14,7 @@ X create default token validation middleware
 X create composables for API calls
 X create composables for token validation
 X create guest auth for login page
-- add rish text editor
+X add rish text editor
 - active table indicator
 - UI to show records in the table
 - render Nuxt error page

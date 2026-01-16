@@ -9,6 +9,14 @@
                 <span class="mx-3">/</span>
                 <button @click="show = true" class="w-7.5 h-7.5 flex items-center justify-center bg-red-600/5 rounded-full"><img src="https://api.iconify.design/ic:baseline-delete-forever.svg?color=%23e01b24" width="20"></button>
             </div>
+
+            <ClientOnly>
+                <Quill v-model:content="body" />
+            </ClientOnly>
+            
+            {{ body }}
+
+            
             <div class="bg-dark/5 backdrop-blur-sm fixed top-0 left-0 z-40 w-full h-full" v-if="show">
                 <div class="w-full h-full flex justify-end" @click.self="show = false">
                     <div class="w-137.5 h-full border-l border-white/10 bg-light p-6 overflow-y-auto">
@@ -39,6 +47,8 @@
         message: null,
         count: 0
     });
+
+    const body = ref("");
 
     const { authFetch } = useAuthFetch();
     const show = ref(false);
