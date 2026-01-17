@@ -63,7 +63,7 @@
                                         <span class="text-sm">Nullable</span>
                                     </label>
                                 </div>
-                                <div v-if="field.type === 'VARCHAR' || field.type === 'TEXT'" class="grid grid-cols-2 gap-3">
+                                <div v-if="field.type === 'VARCHAR'" class="grid grid-cols-2 gap-3">
                                     <div class="flex flex-col">
                                         <AppLabel text="Min length"/>
                                         <AppInput 
