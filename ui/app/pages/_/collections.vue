@@ -6,15 +6,17 @@
         <div class="p-3" v-if="collections.length">
             <div class="flex items-center">
                 <h1 class="text-lg">Collections</h1>
-                <span class="mx-3">/</span>
+                <span class="mx-3">/ <strong class="ml-2">{{ active_tb_name }}</strong></span>
                 <button @click="show = true" class="w-7.5 h-7.5 flex items-center justify-center bg-red-600/5 rounded-full"><img src="https://api.iconify.design/ic:baseline-delete-forever.svg?color=%23e01b24" width="20"></button>
             </div>
 
-            <ClientOnly>
+            <!-- <ClientOnly>
                 <Quill v-model:content="body" />
             </ClientOnly>
             
-            {{ body }}
+            {{ body }} -->
+
+            <AppTable />
 
             
             <div class="bg-dark/5 backdrop-blur-sm fixed top-0 left-0 z-40 w-full h-full" v-if="show">
@@ -40,9 +42,9 @@
 </template>
 
 <script setup>
-    definePageMeta({
-        middleware: 'auth'
-    });
+    // definePageMeta({
+    //     middleware: 'auth'
+    // });
     const errors = ref({
         message: null,
         count: 0
