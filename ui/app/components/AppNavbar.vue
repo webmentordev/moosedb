@@ -3,9 +3,9 @@
         <div class="flex flex-col">
             <NuxtLink to="/_/" class="m-auto"><img src="/moose.png" width="50px"></NuxtLink>
             <div class="grid grid-cols-1 gap-4 mt-5 border-t border-white/10 pt-4">
-                <NuxtLink to="/_/collections" class="p-2 bg-light w-fit border m-auto border-white/5 rounded-xl hover:border-main transition-all"><img src="https://api.iconify.design/material-symbols:database-sharp.svg?color=%23ffffff" width="30px"></NuxtLink>
-                <NuxtLink to="/_/logs" class="p-2 bg-light w-fit border m-auto border-white/5 rounded-xl hover:border-main transition-all"><img src="https://api.iconify.design/material-symbols-light:ssid-chart-rounded.svg?color=%23ffffff" width="30px"></NuxtLink>
-                <NuxtLink to="/_/settings" class="p-2 bg-light w-fit border m-auto border-white/5 rounded-xl hover:border-main transition-all"><img class="group-hover:animate-spin" src="https://api.iconify.design/solar:settings-linear.svg?color=%23ffffff" width="30px"></NuxtLink>
+                <NuxtLink to="/_/collections" class="p-2 bg-light w-fit border m-auto rounded-xl hover:border-main transition-all" :class="isCollections ? 'border-main' : 'border-white/5'"><img src="https://api.iconify.design/material-symbols:database-sharp.svg?color=%23ffffff" width="30px"></NuxtLink>
+                <NuxtLink to="/_/logs" class="p-2 bg-light w-fit border m-auto rounded-xl hover:border-main transition-all" :class="isLogs ? 'border-main' : 'border-white/5'"><img src="https://api.iconify.design/material-symbols-light:ssid-chart-rounded.svg?color=%23ffffff" width="30px"></NuxtLink>
+                <NuxtLink to="/_/settings" class="p-2 bg-light w-fit border m-auto rounded-xl hover:border-main transition-all" :class="isSettings ? 'border-main' : 'border-white/5'"><img class="group-hover:animate-spin" src="https://api.iconify.design/solar:settings-linear.svg?color=%23ffffff" width="30px"></NuxtLink>
             </div>
         </div>
         <AppLoading v-if="processing" message="Logging out..." />
@@ -17,7 +17,16 @@
 <script setup>
     const processing = ref(false);
     const { removeToken } = useAuthToken();
-    const { authFetch } = useAuthFetch();
+    const route = useRoute()
+    const isCollections = computed(() =>
+        route.path.includes('collections')
+    );
+    const isLogs = computed(() =>
+        route.path.includes('logs')
+    );
+    const isSettings = computed(() =>
+        route.path.includes('settings')
+    )
     async function logout() {
         processing.value = true;
         removeToken();

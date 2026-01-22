@@ -18,6 +18,7 @@ X add rish text editor
 - active table indicator
 - UI to show records in the table
 - render Nuxt error page
+- improve active tab deetection
 
 
 
