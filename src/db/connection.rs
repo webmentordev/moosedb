@@ -111,3 +111,17 @@ pub fn update_setting(key: String, new_value: String) -> Result<()> {
     }
     Ok(())
 }
+
+pub fn update_secret_key() -> Result<()> {
+    let conn = Connection::open("database.sqlite")?;
+
+    let updated = conn.execute(
+        "UPDATE _configs SET value = ?1 WHERE key = 'secret'",
+        params![generate_secret()],
+    )?;
+
+    if updated != 1 {
+        eprintln!("Unexpected: serect key could not be updated. Reason: {}", updated);
+    }
+    Ok(())
+}

@@ -31,6 +31,7 @@ X add rish text editor
     X create serve command
     X create update password command
     X add command to change port
+    x update secret token
 - fill default configurations
     X default hash for encryption
     X use default token created in the DB

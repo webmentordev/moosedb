@@ -53,6 +53,8 @@ enum Commands {
         #[arg(long = "password", short = 'p', required = true, value_name = "PASSWORD")]
         password: String,
     },
+    /// Update the system’s secret token.
+    Upsecret
 }
 
 
@@ -170,6 +172,13 @@ async fn main() -> std::io::Result<()> {
     match args.command {
         None => {
             Args::parse_from(&["moosedb", "--help"]);
+            Ok(())
+        }
+        Some(Commands::Upsecret) => {
+            match moosedb::update_secret_key() {
+                Ok(_) => println!("Secret token has been updated!"),
+                Err(error) => println!("Secret update failed! Reason: {}", error)
+            }
             Ok(())
         }
         Some(Commands::Upsuper { email, password}) => {
