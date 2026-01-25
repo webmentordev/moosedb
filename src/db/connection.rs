@@ -1,6 +1,6 @@
 use rusqlite::{Connection, Result, params};
 use bcrypt::{DEFAULT_COST, hash};
-use crate::utils::random::generate_uid;
+use crate::utils::random::generate_secret;
 use std::collections::HashMap;
 
 pub fn initialize_db(conn: &Connection, create_new_db: bool) -> Result<()> {
@@ -18,7 +18,7 @@ pub fn initialize_db(conn: &Connection, create_new_db: bool) -> Result<()> {
         conn.execute(
             "INSERT INTO _configs (key, value) 
             VALUES (?1, ?2)",
-            ["secret".to_string(), generate_uid(70)],
+            ["secret".to_string(), generate_secret()],
         )
         .unwrap();
         conn.execute(
