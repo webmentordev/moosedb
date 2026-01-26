@@ -27,6 +27,8 @@ X add rish text editor
 --------------------
 - create session validation system like Laravel
 - create logs database
+x create new super admin API
+    - short error message and send in json
 - add cli commands parsing
     X create serve command
     X create update password command
@@ -41,7 +43,7 @@ X add rish text editor
     X create api for signout
 - secure super admin routes
     - create api for updating password from dashboard
-    - create cli command for updating password
+    x create cli command for updating password
 - add email sending feature
     - add saving smtp creds
     - add html and css template customization for Email
@@ -65,3 +67,4 @@ Critical Errors
 ------------------------------------------------------------
 X Fix column types in Frontend and backend
 x fix the collections listing click issue
+- optimize all API responses to trycatch friendly 

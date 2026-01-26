@@ -1,4 +1,5 @@
 use rusqlite::{Connection, Result, params};
+use rusqlite::Error as RusqliteError;
 use bcrypt::{DEFAULT_COST, hash};
 use crate::utils::random::generate_secret;
 use std::collections::HashMap;
@@ -52,7 +53,7 @@ pub fn initialize_db(conn: &Connection, create_new_db: bool) -> Result<()> {
     Ok(())
 }
 
-
+// Load configs
 pub fn load_configs(conn: &Connection) -> Result<HashMap<String, String>> {
     let mut stmt = conn.prepare("SELECT key, value FROM _configs")?;
     let mut configs = HashMap::new();
@@ -69,7 +70,7 @@ pub fn load_configs(conn: &Connection) -> Result<HashMap<String, String>> {
     Ok(configs)
 }
 
-
+// Update super admin
 pub fn update_super_user(email: String, new_password: String) -> Result<()> {
     let conn = Connection::open("database.sqlite")?;
 
@@ -97,7 +98,37 @@ pub fn update_super_user(email: String, new_password: String) -> Result<()> {
     Ok(())
 }
 
+// Create new super admin
+pub fn create_super_admin(name: String, email: String, password: String, confirm_password: String) -> rusqlite::Result<()> {
+    if password != confirm_password {
+        return Err(RusqliteError::InvalidParameterName("Passwords do not match".to_string()));
+    }
+    
+    let conn = Connection::open("database.sqlite")?;
+    let exists: bool = conn.query_row(
+        "SELECT EXISTS(SELECT 1 FROM _super_admins WHERE email = ?1)",
+        params![email],
+        |row| row.get(0),
+    )?;
+    
+    if exists {
+        return Err(RusqliteError::InvalidParameterName(
+            format!("Super admin with email '{}' already exists", email)
+        ));
+    }
+    
+    let hashed_password = hash(password, DEFAULT_COST)
+    .map_err(|_| RusqliteError::InvalidParameterName("Failed to hash password".to_string()))?;
+    
+    conn.execute(
+        "INSERT INTO _super_admins (name, email, password) VALUES (?1, ?2, ?3)",
+        params![name, email, hashed_password],
+    )?;
+    Ok(())
+}
 
+
+// Update setting
 pub fn update_setting(key: String, new_value: String) -> Result<()> {
     let conn = Connection::open("database.sqlite")?;
 
@@ -112,6 +143,8 @@ pub fn update_setting(key: String, new_value: String) -> Result<()> {
     Ok(())
 }
 
+
+// Update Secret ket
 pub fn update_secret_key() -> Result<()> {
     let conn = Connection::open("database.sqlite")?;
 

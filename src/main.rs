@@ -229,6 +229,7 @@ async fn main() -> std::io::Result<()> {
                             .service(get_collections)
                             .service(delete_collection)
                             .service(get_collection_records)
+                            .service(create_super_admin)
                     )
                     .service(web::scope("/api").service(get_version))
                     .default_service(web::route().to(static_files))
@@ -555,6 +556,35 @@ async fn get_collections(
         }
     }
 }
+
+#[derive(Deserialize, Serialize)]
+struct CreateAdmin {
+    name: String,
+    email: String,
+    password: String,
+    confirm_password: String
+}
+
+#[post("/create-super-admin")]
+async fn create_super_admin(
+    request: web::Json<CreateAdmin>
+) -> Result<impl Responder> {
+    match moosedb::create_super_admin(request.name.to_string(), request.email.to_string(), request.password.to_string(), request.confirm_password.to_string()) {
+        Ok(_) => {
+            Ok(web::Json(Response {
+                success: true,
+                message: "Super admin has been added!".to_string()
+            }))
+        }
+        Err(err) => {
+            Ok(web::Json(Response {
+                success: false,
+                message: err.to_string()
+            }))
+        }
+    }
+}
+
 
 
 

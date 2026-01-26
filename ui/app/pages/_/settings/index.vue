@@ -18,11 +18,14 @@
             <form @submit.prevent="add_new_admin" method="post" class="flex flex-col bg-dark p-6 rounded-xl mt-4">
                 <h3 class="text-lg">Create new super admin</h3>
                 <div class="grid grid-cols-2 gap-3 w-full mt-3">
-                    <div class="flex flex-col col-span-2">
+                    <div class="flex flex-col">
+                        <AppInput class="bg-light" type="text" v-model="name" placeholder="Name" required />
+                        <AlertsAlertError v-if="errors.name" error="Name is required." />
+                    </div>
+                    <div class="flex flex-col">
                         <AppInput class="bg-light" type="email" v-model="email" placeholder="Email address" required />
                         <AlertsAlertError v-if="errors.email" error="Email address is required." />
                     </div>
-
                     <div class="flex flex-col">
                         <AppInput class="bg-light" type="password" v-model="password" placeholder="Password" required />
                         <AlertsAlertError v-if="errors.password" error="Password is required." />
@@ -45,6 +48,7 @@
 
 <script setup>
     const appname = ref("");
+    const name = ref("");
     const email = ref("");
     const password = ref("");
     const confirm_password = ref("");
@@ -52,6 +56,7 @@
     const processing = ref(false);
     const errors = ref({
         appname: null,
+        name: null,
         email: null,
         password: null,
         confirm_password: null,
@@ -111,6 +116,10 @@
     // Ceate new super admin
     async function add_new_admin() {
         reset_values();
+        if(name.value.trim() == ""){
+            errors.value.name = "required";
+            errors.value.count += 1;
+        }
         if(email.value.trim() == ""){
             errors.value.email = "required";
             errors.value.count += 1;
@@ -130,9 +139,10 @@
         if(errors.value.count == 0){
             processing.value = true;
             try {
-                const data = await authFetch('/admin/api/add-super-admin', {
+                const data = await authFetch('/admin/api/create-super-admin', {
                     method: "POST",
                     body: {
+                        name: email.value,
                         email: email.value,
                         password: password.value,
                         confirm_password: confirm_password.value
@@ -155,6 +165,7 @@
         response.value = null;
         errors.value = {
             appname: null,
+            name: null,
             email: null,
             password: null,
             confirm_password: null,
