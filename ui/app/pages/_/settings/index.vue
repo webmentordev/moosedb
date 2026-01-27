@@ -42,11 +42,26 @@
                     </button>
                 </div>
             </form>
+
+
+            <div class="flex flex-col bg-dark p-6 rounded-xl mt-4">
+                <h3 class="text-lg">Super admins</h3>
+                <div v-if="super_admins.length">
+                    <div class="w-full h-full">
+                        <AppTable :records="super_admins" />
+                    </div>
+                </div>
+                <div v-else>
+                    <p>Super admins could not be fetched or do not exist.</p>
+                </div>
+            </div>
         </div>
     </div>
 </template>
 
 <script setup>
+    const super_admins = ref([]);
+    
     const appname = ref("");
     const name = ref("");
     const email = ref("");
@@ -82,6 +97,17 @@
     } catch (error) {
         console.error('Failed to fetch:', error);
     }
+
+    // Get super admins
+    try {
+        const data = await authFetch('/admin/api/get-super-admins');
+        if(data.success == true){
+            super_admins.value = data.super_admins;
+        }
+    } catch (error) {
+        console.error('Failed to fetch:', error);
+    }
+
 
     // Update app name
     async function update_appname() {

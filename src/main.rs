@@ -230,6 +230,7 @@ async fn main() -> std::io::Result<()> {
                             .service(delete_collection)
                             .service(get_collection_records)
                             .service(create_super_admin)
+                            .service(get_super_admins)
                     )
                     .service(web::scope("/api").service(get_version))
                     .default_service(web::route().to(static_files))
@@ -552,6 +553,54 @@ async fn get_collections(
             Ok(HttpResponse::InternalServerError().json(Response {
                 success: false,
                 message: format!("Failed to fetch collections: {}", err),
+            }))
+        }
+    }
+}
+
+
+#[get("/get-super-admins")]
+async fn get_super_admins(
+    app_data: web::Data<AppData>,
+) -> Result<HttpResponse, Error> {
+    let conn = match app_data.database.get() {
+        Ok(conn) => conn,
+        Err(err) => {
+            return Ok(HttpResponse::InternalServerError().json(Response {
+                success: false,
+                message: format!("Failed to get database connection: {}", err),
+            }));
+        }
+    };
+    let mut stmt = match conn.prepare("SELECT DISTINCT name, email, created_at FROM _super_admins") {
+        Ok(stmt) => stmt,
+        Err(err) => {
+            return Ok(HttpResponse::InternalServerError().json(Response {
+                success: false,
+                message: format!("Failed to prepare query: {}", err),
+            }));
+        }
+    };
+    let super_admins: Result<Vec<serde_json::Value>, _> = stmt
+        .query_map([], |row| {
+            Ok(serde_json::json!({
+                "name": row.get::<_, String>(0)?,
+                "email": row.get::<_, String>(1)?,
+                "created_at": row.get::<_, String>(2)?,
+            }))
+        })
+        .and_then(|mapped_rows| mapped_rows.collect());
+    match super_admins {
+        Ok(super_admins) => {
+            Ok(HttpResponse::Ok().json(serde_json::json!({
+                "success": true,
+                "super_admins": super_admins
+            })))
+        }
+        Err(err) => {
+            Ok(HttpResponse::InternalServerError().json(Response {
+                success: false,
+                message: format!("Failed to fetch super admins: {}", err),
             }))
         }
     }

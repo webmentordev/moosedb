@@ -33,13 +33,12 @@
     const props = defineProps({
         records: {
             type: Array,
-            default: () => []
+            default: () => [
+                { name: 'John', age: 30, city: 'New York' },
+                { name: 'Jane', age: 25, city: 'London' },
+                { name: 'Bob', age: 35, city: 'Paris' }
+            ]
         }
     });
-    const records = [
-        { name: 'John', age: 30, city: 'New York' },
-        { name: 'Jane', age: 25, city: 'London' },
-        { name: 'Bob', age: 35, city: 'Paris' }
-    ];
-    const keys = records.length > 0 ? Object.keys(records[0]) : [];
+    const keys = props.records.length > 0 ? Object.keys(props.records[0]) : [];
 </script>
