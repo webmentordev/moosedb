@@ -27,6 +27,9 @@ X add rish text editor
 --------------------
 - create session validation system like Laravel
 - create logs database
+- request logging
+    - store request in the database.sqlite
+    - store requests in the app.log file
 x create new super admin API
     - short error message and send in json
 - add cli commands parsing

@@ -16,6 +16,8 @@ use bcrypt::verify;
 use clap::{Parser, Subcommand};
 use std::sync::{RwLock, Arc};
 use moosedb::random_numbers;
+use std::fs::OpenOptions;
+use env_logger::Builder;
 
 #[derive(RustEmbed)]
 #[folder = "ui/dist"]
@@ -168,6 +170,7 @@ async fn static_files(req: HttpRequest) -> HttpResponse {
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
     let args = Args::parse();
+    
 
     match args.command {
         None => {
@@ -191,6 +194,14 @@ async fn main() -> std::io::Result<()> {
         Some(Commands::Serve { host, port }) => {
             let mut create_new_db = false;
             let file_exists = Path::new("database.sqlite").exists();
+            let log_file = OpenOptions::new()
+                .create(true)
+                .append(true)
+                .open("app.log")?;
+            
+            Builder::from_env(env_logger::Env::new().default_filter_or("info"))
+                .target(env_logger::Target::Pipe(Box::new(log_file)))
+                .init();
             
             if !file_exists {
                 create_new_db = true;
