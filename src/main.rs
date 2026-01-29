@@ -1,29 +1,29 @@
-
-use actix_web::{get, post, web, App, HttpServer, HttpResponse, HttpRequest, HttpMessage, Result, Responder, middleware, Error};
 use actix_web::dev::ServiceRequest;
+use actix_web::{
+    App, Error, HttpMessage, HttpRequest, HttpResponse, HttpServer, Responder, Result, get,
+    middleware, post, web,
+};
 use actix_web_httpauth::extractors::bearer::BearerAuth;
 use actix_web_httpauth::middleware::HttpAuthentication;
-use jsonwebtoken::{encode, decode, Header, Validation, EncodingKey, DecodingKey};
-use r2d2_sqlite::SqliteConnectionManager;
-use std::collections::HashMap;
-use std::path::Path;
-use r2d2::Pool;
-use serde::{Serialize, Deserialize};
-use mime_guess::from_path;
-use rust_embed::RustEmbed;
-use std::time::{SystemTime, UNIX_EPOCH};
 use bcrypt::verify;
 use clap::{Parser, Subcommand};
-use std::sync::{RwLock, Arc};
-use moosedb::random_numbers;
-use std::fs::OpenOptions;
 use env_logger::Builder;
+use jsonwebtoken::{DecodingKey, EncodingKey, Header, Validation, decode, encode};
+use mime_guess::from_path;
+use moosedb::random_numbers;
+use r2d2::Pool;
+use r2d2_sqlite::SqliteConnectionManager;
+use rust_embed::RustEmbed;
+use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
+use std::fs::OpenOptions;
+use std::path::Path;
+use std::sync::{Arc, RwLock};
+use std::time::{SystemTime, UNIX_EPOCH};
 
 #[derive(RustEmbed)]
 #[folder = "ui/dist"]
 struct Asset;
-
-
 
 /// MooseDB CLI
 #[derive(Parser, Debug)]
@@ -46,19 +46,23 @@ enum Commands {
         port: u16,
     },
     /// Update super admin credientials
-    Upsuper{
+    Upsuper {
         /// Email of the super admin (Required)
         #[arg(long = "email", short = 'e', required = true, value_name = "EMAIL")]
         email: String,
 
         /// New password of the super admin (Required)
-        #[arg(long = "password", short = 'p', required = true, value_name = "PASSWORD")]
+        #[arg(
+            long = "password",
+            short = 'p',
+            required = true,
+            value_name = "PASSWORD"
+        )]
         password: String,
     },
     /// Update the system’s secret token.
-    Upsecret
+    Upsecret,
 }
-
 
 #[derive(Serialize)]
 struct Info {
@@ -71,9 +75,8 @@ struct Info {
     serde: f32,
     serde_json: f32,
     rust_embed: f32,
-    mime_guess: f32
+    mime_guess: f32,
 }
-
 
 #[derive(Debug, Serialize, Deserialize)]
 struct Claims {
@@ -89,7 +92,6 @@ struct LoginRequest {
     password: String,
 }
 
-
 #[derive(Serialize)]
 struct LoginResponse {
     token: String,
@@ -103,43 +105,41 @@ struct ErrorResponse {
     message: String,
 }
 
-
 #[derive(Deserialize)]
 struct GetSetting {
-    key: String
+    key: String,
 }
 
 #[derive(Serialize)]
 struct SendSetting {
     success: bool,
-    value: String
+    value: String,
 }
 
 #[derive(Deserialize)]
 struct UpdateSetting {
     key: String,
-    value: String
+    value: String,
 }
 
 #[derive(Serialize)]
 struct Response {
     success: bool,
-    message: String
+    message: String,
 }
-
 
 #[derive(Deserialize)]
 struct CollectionID {
-    collection_id: String
+    collection_id: String,
 }
 
 #[derive(Serialize, Deserialize)]
 struct CollectionRecords {
     success: bool,
     message: String,
-    records: Option<Vec<serde_json::Value>>
+    records: Option<Vec<serde_json::Value>>,
+    columns: Option<Vec<String>>,
 }
-
 
 type DbPool = Pool<SqliteConnectionManager>;
 struct AppData {
@@ -170,7 +170,6 @@ async fn static_files(req: HttpRequest) -> HttpResponse {
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
     let args = Args::parse();
-    
 
     match args.command {
         None => {
@@ -180,14 +179,14 @@ async fn main() -> std::io::Result<()> {
         Some(Commands::Upsecret) => {
             match moosedb::update_secret_key() {
                 Ok(_) => println!("Secret token has been updated!"),
-                Err(error) => println!("Secret update failed! Reason: {}", error)
+                Err(error) => println!("Secret update failed! Reason: {}", error),
             }
             Ok(())
         }
-        Some(Commands::Upsuper { email, password}) => {
+        Some(Commands::Upsuper { email, password }) => {
             match moosedb::update_super_user(email, password) {
                 Ok(_) => println!("Super admin's password has been updated!"),
-                Err(_) => println!("Password update failed!")
+                Err(_) => println!("Password update failed!"),
             }
             Ok(())
         }
@@ -198,11 +197,11 @@ async fn main() -> std::io::Result<()> {
                 .create(true)
                 .append(true)
                 .open("app.log")?;
-            
+
             Builder::from_env(env_logger::Env::new().default_filter_or("info"))
                 .target(env_logger::Target::Pipe(Box::new(log_file)))
                 .init();
-            
+
             if !file_exists {
                 create_new_db = true;
             }
@@ -216,16 +215,16 @@ async fn main() -> std::io::Result<()> {
 
             let configs = Arc::new(RwLock::new(moosedb::load_configs(&conn).unwrap()));
             let jwt_secret = configs.read().unwrap().get("secret").unwrap().clone();
-            
+
             println!("🚀 Listening at http://{}:{}", host, port);
-            
+
             HttpServer::new(move || {
                 let auth = HttpAuthentication::bearer(validator);
                 App::new()
-                    .app_data(web::Data::new(AppData { 
+                    .app_data(web::Data::new(AppData {
                         database: pool.clone(),
                         jwt_secret: jwt_secret.clone(),
-                        configs: configs.clone()
+                        configs: configs.clone(),
                     }))
                     .wrap(middleware::Logger::default())
                     .service(index)
@@ -241,7 +240,7 @@ async fn main() -> std::io::Result<()> {
                             .service(delete_collection)
                             .service(get_collection_records)
                             .service(create_super_admin)
-                            .service(get_super_admins)
+                            .service(get_super_admins),
                     )
                     .service(web::scope("/api").service(get_version))
                     .default_service(web::route().to(static_files))
@@ -252,7 +251,6 @@ async fn main() -> std::io::Result<()> {
         }
     }
 }
-
 
 #[get("/")]
 async fn index() -> Result<impl Responder> {
@@ -266,10 +264,9 @@ async fn index() -> Result<impl Responder> {
         serde: 1.0,
         serde_json: 1.0,
         rust_embed: 8.0,
-        mime_guess: 2.0
+        mime_guess: 2.0,
     }))
 }
-
 
 #[post("/get-version")]
 async fn get_version() -> Result<impl Responder> {
@@ -283,64 +280,57 @@ async fn get_version() -> Result<impl Responder> {
         serde: 1.0,
         serde_json: 1.0,
         rust_embed: 8.0,
-        mime_guess: 2.0
+        mime_guess: 2.0,
     }))
 }
 
 #[post("/get-setting")]
 async fn get_setting(
     data: web::Data<AppData>,
-    request: web::Json<GetSetting>
+    request: web::Json<GetSetting>,
 ) -> Result<impl Responder> {
     let configs = data.configs.read().unwrap();
     match configs.get(&request.key) {
-        Some(value) => {
-            Ok(web::Json(SendSetting {
-                success: true,
-                value: value.clone()
-            }))
-        }
-        None => {
-            Ok(web::Json(SendSetting {
-                success: false,
-                value: String::new()
-            }))
-        }
+        Some(value) => Ok(web::Json(SendSetting {
+            success: true,
+            value: value.clone(),
+        })),
+        None => Ok(web::Json(SendSetting {
+            success: false,
+            value: String::new(),
+        })),
     }
 }
 
 #[post("/update-setting")]
 async fn update_setting(
     data: web::Data<AppData>,
-    request: web::Json<UpdateSetting>
+    request: web::Json<UpdateSetting>,
 ) -> Result<impl Responder> {
     match moosedb::update_setting(request.key.to_string(), request.value.to_string()) {
         Ok(_) => {
             let mut configs = data.configs.write().unwrap();
             configs.insert(request.key.to_string(), request.value.to_string());
-            
+
             Ok(web::Json(Response {
                 success: true,
-                message: "Setting updated successfully".to_string()
+                message: "Setting updated successfully".to_string(),
             }))
         }
-        Err(err) => {
-            Ok(web::Json(Response {
-                success: false,
-                message: err.to_string()
-            }))
-        }
+        Err(err) => Ok(web::Json(Response {
+            success: false,
+            message: err.to_string(),
+        })),
     }
 }
-
 
 #[post("/get-collection-records")]
 async fn get_collection_records(
     data: web::Data<AppData>,
-    request: web::Json<CollectionID>
+    request: web::Json<CollectionID>,
 ) -> Result<impl Responder> {
     let collection_id = request.collection_id.clone();
-    
+
     let conn = match data.database.get() {
         Ok(conn) => conn,
         Err(err) => {
@@ -348,6 +338,7 @@ async fn get_collection_records(
                 success: false,
                 message: format!("Failed to get database connection: {}", err),
                 records: None,
+                columns: None,
             }));
         }
     };
@@ -357,12 +348,13 @@ async fn get_collection_records(
         [],
         |row| row.get(0),
     );
-    
+
     if let Ok(0) = metadata_exists {
         return Ok(HttpResponse::NotFound().json(CollectionRecords {
             success: false,
             message: "Metadata table does not exist".to_string(),
             records: None,
+            columns: None,
         }));
     }
 
@@ -379,6 +371,7 @@ async fn get_collection_records(
                 success: false,
                 message: format!("Collection with id '{}' not found", collection_id),
                 records: None,
+                columns: None,
             }));
         }
         Err(err) => {
@@ -386,6 +379,7 @@ async fn get_collection_records(
                 success: false,
                 message: format!("Failed to query collection: {}", err),
                 records: None,
+                columns: None,
             }));
         }
     };
@@ -397,6 +391,7 @@ async fn get_collection_records(
                 success: false,
                 message: format!("Failed to prepare query: {}", err),
                 records: None,
+                columns: None,
             }));
         }
     };
@@ -426,6 +421,7 @@ async fn get_collection_records(
                 success: false,
                 message: format!("Failed to query records: {}", err),
                 records: None,
+                columns: None,
             }));
         }
     };
@@ -436,18 +432,17 @@ async fn get_collection_records(
         success: true,
         message: format!("Retrieved {} records from '{}'", records.len(), table_name),
         records: Some(records),
+        columns: Some(column_names),
     }))
 }
-
-
 
 #[post("/delete-collection")]
 async fn delete_collection(
     data: web::Data<AppData>,
-    request: web::Json<CollectionID>
+    request: web::Json<CollectionID>,
 ) -> Result<impl Responder> {
     let collection_id = request.collection_id.clone();
-    
+
     let conn = match data.database.get() {
         Ok(conn) => conn,
         Err(err) => {
@@ -462,7 +457,7 @@ async fn delete_collection(
         [],
         |row| row.get(0),
     );
-    
+
     if let Ok(0) = metadata_exists {
         return Ok(HttpResponse::NotFound().json(Response {
             success: false,
@@ -510,12 +505,8 @@ async fn delete_collection(
     }))
 }
 
-
-
 #[get("/collections")]
-async fn get_collections(
-    app_data: web::Data<AppData>,
-) -> Result<HttpResponse, Error> {
+async fn get_collections(app_data: web::Data<AppData>) -> Result<HttpResponse, Error> {
     let conn = match app_data.database.get() {
         Ok(conn) => conn,
         Err(err) => {
@@ -536,15 +527,16 @@ async fn get_collections(
             "collections": []
         })));
     }
-    let mut stmt = match conn.prepare("SELECT DISTINCT table_id, table_name FROM _database_metadata") {
-        Ok(stmt) => stmt,
-        Err(err) => {
-            return Ok(HttpResponse::InternalServerError().json(Response {
-                success: false,
-                message: format!("Failed to prepare query: {}", err),
-            }));
-        }
-    };
+    let mut stmt =
+        match conn.prepare("SELECT DISTINCT table_id, table_name FROM _database_metadata") {
+            Ok(stmt) => stmt,
+            Err(err) => {
+                return Ok(HttpResponse::InternalServerError().json(Response {
+                    success: false,
+                    message: format!("Failed to prepare query: {}", err),
+                }));
+            }
+        };
     let collections: Result<Vec<serde_json::Value>, _> = stmt
         .query_map([], |row| {
             Ok(serde_json::json!({
@@ -554,26 +546,19 @@ async fn get_collections(
         })
         .and_then(|mapped_rows| mapped_rows.collect());
     match collections {
-        Ok(collections) => {
-            Ok(HttpResponse::Ok().json(serde_json::json!({
-                "success": true,
-                "collections": collections
-            })))
-        }
-        Err(err) => {
-            Ok(HttpResponse::InternalServerError().json(Response {
-                success: false,
-                message: format!("Failed to fetch collections: {}", err),
-            }))
-        }
+        Ok(collections) => Ok(HttpResponse::Ok().json(serde_json::json!({
+            "success": true,
+            "collections": collections
+        }))),
+        Err(err) => Ok(HttpResponse::InternalServerError().json(Response {
+            success: false,
+            message: format!("Failed to fetch collections: {}", err),
+        })),
     }
 }
 
-
 #[get("/get-super-admins")]
-async fn get_super_admins(
-    app_data: web::Data<AppData>,
-) -> Result<HttpResponse, Error> {
+async fn get_super_admins(app_data: web::Data<AppData>) -> Result<HttpResponse, Error> {
     let conn = match app_data.database.get() {
         Ok(conn) => conn,
         Err(err) => {
@@ -583,7 +568,8 @@ async fn get_super_admins(
             }));
         }
     };
-    let mut stmt = match conn.prepare("SELECT DISTINCT name, email, created_at FROM _super_admins") {
+    let mut stmt = match conn.prepare("SELECT DISTINCT name, email, created_at FROM _super_admins")
+    {
         Ok(stmt) => stmt,
         Err(err) => {
             return Ok(HttpResponse::InternalServerError().json(Response {
@@ -602,18 +588,14 @@ async fn get_super_admins(
         })
         .and_then(|mapped_rows| mapped_rows.collect());
     match super_admins {
-        Ok(super_admins) => {
-            Ok(HttpResponse::Ok().json(serde_json::json!({
-                "success": true,
-                "super_admins": super_admins
-            })))
-        }
-        Err(err) => {
-            Ok(HttpResponse::InternalServerError().json(Response {
-                success: false,
-                message: format!("Failed to fetch super admins: {}", err),
-            }))
-        }
+        Ok(super_admins) => Ok(HttpResponse::Ok().json(serde_json::json!({
+            "success": true,
+            "super_admins": super_admins
+        }))),
+        Err(err) => Ok(HttpResponse::InternalServerError().json(Response {
+            success: false,
+            message: format!("Failed to fetch super admins: {}", err),
+        })),
     }
 }
 
@@ -622,31 +604,27 @@ struct CreateAdmin {
     name: String,
     email: String,
     password: String,
-    confirm_password: String
+    confirm_password: String,
 }
 
 #[post("/create-super-admin")]
-async fn create_super_admin(
-    request: web::Json<CreateAdmin>
-) -> Result<impl Responder> {
-    match moosedb::create_super_admin(request.name.to_string(), request.email.to_string(), request.password.to_string(), request.confirm_password.to_string()) {
-        Ok(_) => {
-            Ok(web::Json(Response {
-                success: true,
-                message: "Super admin has been added!".to_string()
-            }))
-        }
-        Err(err) => {
-            Ok(web::Json(Response {
-                success: false,
-                message: err.to_string()
-            }))
-        }
+async fn create_super_admin(request: web::Json<CreateAdmin>) -> Result<impl Responder> {
+    match moosedb::create_super_admin(
+        request.name.to_string(),
+        request.email.to_string(),
+        request.password.to_string(),
+        request.confirm_password.to_string(),
+    ) {
+        Ok(_) => Ok(web::Json(Response {
+            success: true,
+            message: "Super admin has been added!".to_string(),
+        })),
+        Err(err) => Ok(web::Json(Response {
+            success: false,
+            message: err.to_string(),
+        })),
     }
 }
-
-
-
 
 #[derive(Deserialize, Serialize, Debug)]
 struct CollectionRequest {
@@ -670,7 +648,7 @@ struct CollectionFields {
 #[post("/create-collection")]
 async fn create_collection(
     data: web::Json<CollectionRequest>,
-    app_data: web::Data<AppData>
+    app_data: web::Data<AppData>,
 ) -> Result<HttpResponse, Error> {
     if data.collection.is_empty() {
         return Ok(HttpResponse::BadRequest().json(Response {
@@ -823,24 +801,22 @@ fn sql_type_from_field_type(field_type: &str) -> &str {
     }
 }
 
-async fn login(
-    data: web::Data<AppData>,
-    credentials: web::Json<LoginRequest>,
-) -> impl Responder {
-
-    let conn = match data.database.get(){
+async fn login(data: web::Data<AppData>, credentials: web::Json<LoginRequest>) -> impl Responder {
+    let conn = match data.database.get() {
         Ok(conn) => conn,
         Err(_) => {
-            return HttpResponse::InternalServerError().json(ErrorResponse{
+            return HttpResponse::InternalServerError().json(ErrorResponse {
                 success: false,
-                message: "Database connection failed.".to_string()
+                message: "Database connection failed.".to_string(),
             });
         }
     };
 
-    let result: Result<(String, String), rusqlite::Error> = conn.query_row("SELECT email, password from _super_admins WHERE email = ?1", 
-    [&credentials.email], 
-    |row| Ok((row.get(0)?, row.get(1)?))); 
+    let result: Result<(String, String), rusqlite::Error> = conn.query_row(
+        "SELECT email, password from _super_admins WHERE email = ?1",
+        [&credentials.email],
+        |row| Ok((row.get(0)?, row.get(1)?)),
+    );
 
     match result {
         Ok((email, hashed_password)) => {
@@ -857,8 +833,8 @@ async fn login(
                         message: "Failed to create token".to_string(),
                     }),
                 }
-            }else{
-                HttpResponse::Unauthorized().json(ErrorResponse{
+            } else {
+                HttpResponse::Unauthorized().json(ErrorResponse {
                     success: false,
                     message: "Email or Password does not match.".to_string(),
                 })
@@ -892,7 +868,11 @@ async fn validator(
     }
 }
 
-fn create_jwt(email: &str, user_id: &str, secret: &str) -> Result<String, jsonwebtoken::errors::Error> {
+fn create_jwt(
+    email: &str,
+    user_id: &str,
+    secret: &str,
+) -> Result<String, jsonwebtoken::errors::Error> {
     let now = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .unwrap()
