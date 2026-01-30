@@ -562,22 +562,30 @@ async fn get_super_admins(app_data: web::Data<AppData>) -> Result<HttpResponse, 
     let conn = match app_data.database.get() {
         Ok(conn) => conn,
         Err(err) => {
-            return Ok(HttpResponse::InternalServerError().json(Response {
-                success: false,
-                message: format!("Failed to get database connection: {}", err),
-            }));
+            return Ok(HttpResponse::InternalServerError().json(serde_json::json!({
+                "success": false,
+                "message": format!("Failed to get database connection: {}", err),
+                "records": None::<Vec<serde_json::Value>>,
+                "columns": None::<Vec<String>>,
+            })));
         }
     };
+
     let mut stmt = match conn.prepare("SELECT DISTINCT name, email, created_at FROM _super_admins")
     {
         Ok(stmt) => stmt,
         Err(err) => {
-            return Ok(HttpResponse::InternalServerError().json(Response {
-                success: false,
-                message: format!("Failed to prepare query: {}", err),
-            }));
+            return Ok(HttpResponse::InternalServerError().json(serde_json::json!({
+                "success": false,
+                "message": format!("Failed to prepare query: {}", err),
+                "records": None::<Vec<serde_json::Value>>,
+                "columns": None::<Vec<String>>,
+            })));
         }
     };
+
+    let column_names: Vec<String> = stmt.column_names().iter().map(|s| s.to_string()).collect();
+
     let super_admins: Result<Vec<serde_json::Value>, _> = stmt
         .query_map([], |row| {
             Ok(serde_json::json!({
@@ -587,15 +595,19 @@ async fn get_super_admins(app_data: web::Data<AppData>) -> Result<HttpResponse, 
             }))
         })
         .and_then(|mapped_rows| mapped_rows.collect());
+
     match super_admins {
         Ok(super_admins) => Ok(HttpResponse::Ok().json(serde_json::json!({
             "success": true,
-            "super_admins": super_admins
+            "records": super_admins,
+            "columns": column_names,
         }))),
-        Err(err) => Ok(HttpResponse::InternalServerError().json(Response {
-            success: false,
-            message: format!("Failed to fetch super admins: {}", err),
-        })),
+        Err(err) => Ok(HttpResponse::InternalServerError().json(serde_json::json!({
+            "success": false,
+            "message": format!("Failed to fetch super admins: {}", err),
+            "records": None::<Vec<serde_json::Value>>,
+            "columns": None::<Vec<String>>,
+        }))),
     }
 }
 
