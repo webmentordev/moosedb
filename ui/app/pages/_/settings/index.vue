@@ -53,7 +53,7 @@
                 <h3 class="text-lg">Super admins</h3>
                 <div v-if="super_admins.length">
                     <div class="w-full h-full">
-                        <AppTable :records="super_admins" :columns="super_columns" />
+                        <AppAdminTable :records="super_admins" :columns="super_columns" />
                     </div>
                 </div>
                 <div v-else>

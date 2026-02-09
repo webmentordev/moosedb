@@ -26,6 +26,7 @@ X add rish text editor
 # Actix (Backend)
 --------------------
 - create session validation system like Laravel
+X use column names
 - create logs database
 - request logging
     - store request in the database.sqlite

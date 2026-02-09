@@ -133,12 +133,18 @@ struct CollectionID {
     collection_id: String,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Deserialize, Serialize, Debug)]
+struct ColumnInfo {
+    name: String,
+    field_type: String,
+}
+
+#[derive(Deserialize, Serialize, Debug)]
 struct CollectionRecords {
     success: bool,
     message: String,
     records: Option<Vec<serde_json::Value>>,
-    columns: Option<Vec<String>>,
+    columns: Option<Vec<ColumnInfo>>,
 }
 
 type DbPool = Pool<SqliteConnectionManager>;
@@ -384,6 +390,43 @@ async fn get_collection_records(
         }
     };
 
+    let mut metadata_stmt = match conn.prepare(
+        "SELECT field_name, field_type FROM _database_metadata WHERE table_name = ?1 ORDER BY ROWID"
+    ) {
+        Ok(stmt) => stmt,
+        Err(err) => {
+            return Ok(HttpResponse::InternalServerError().json(CollectionRecords {
+                success: false,
+                message: format!("Failed to prepare metadata query: {}", err),
+                records: None,
+                columns: None,
+            }));
+        }
+    };
+
+    let columns_info: Vec<ColumnInfo> = match metadata_stmt.query_map([&table_name], |row| {
+        Ok(ColumnInfo {
+            name: row.get(0)?,
+            field_type: row.get(1)?,
+        })
+    }) {
+        Ok(rows) => rows.filter_map(|r| r.ok()).collect(),
+        Err(err) => {
+            return Ok(HttpResponse::InternalServerError().json(CollectionRecords {
+                success: false,
+                message: format!("Failed to query column metadata: {}", err),
+                records: None,
+                columns: None,
+            }));
+        }
+    };
+
+    let mut all_columns = vec![ColumnInfo {
+        name: "id".to_string(),
+        field_type: "INTEGER".to_string(),
+    }];
+    all_columns.extend(columns_info);
+
     let mut stmt = match conn.prepare(&format!("SELECT * FROM \"{}\"", table_name)) {
         Ok(stmt) => stmt,
         Err(err) => {
@@ -432,7 +475,7 @@ async fn get_collection_records(
         success: true,
         message: format!("Retrieved {} records from '{}'", records.len(), table_name),
         records: Some(records),
-        columns: Some(column_names),
+        columns: Some(all_columns),
     }))
 }
 
