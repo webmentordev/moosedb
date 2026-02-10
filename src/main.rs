@@ -246,7 +246,8 @@ async fn main() -> std::io::Result<()> {
                             .service(delete_collection)
                             .service(get_collection_records)
                             .service(create_super_admin)
-                            .service(get_super_admins),
+                            .service(get_super_admins)
+                            .service(create_record),
                     )
                     .service(web::scope("/api").service(get_version))
                     .default_service(web::route().to(static_files))
@@ -328,6 +329,126 @@ async fn update_setting(
             message: err.to_string(),
         })),
     }
+}
+
+#[derive(Deserialize, Serialize, Debug)]
+struct CreateRecordRequest {
+    collection_id: String,
+    data: serde_json::Map<String, serde_json::Value>,
+}
+
+#[post("/create-record")]
+async fn create_record(
+    request: web::Json<CreateRecordRequest>,
+    app_data: web::Data<AppData>,
+) -> Result<impl Responder> {
+    let collection_id = request.collection_id.clone();
+    let data = request.data.clone();
+
+    let conn = match app_data.database.get() {
+        Ok(conn) => conn,
+        Err(err) => {
+            return Ok(HttpResponse::InternalServerError().json(Response {
+                success: false,
+                message: format!("Failed to get database connection: {}", err),
+            }));
+        }
+    };
+
+    let table_name: Result<String, _> = conn.query_row(
+        "SELECT table_name FROM _database_metadata WHERE table_id = ?1 LIMIT 1",
+        [&collection_id],
+        |row| row.get(0),
+    );
+
+    let table_name = match table_name {
+        Ok(name) => name,
+        Err(rusqlite::Error::QueryReturnedNoRows) => {
+            return Ok(HttpResponse::NotFound().json(Response {
+                success: false,
+                message: format!("Collection with id '{}' not found", collection_id),
+            }));
+        }
+        Err(err) => {
+            return Ok(HttpResponse::InternalServerError().json(Response {
+                success: false,
+                message: format!("Failed to query collection: {}", err),
+            }));
+        }
+    };
+
+    let mut stmt = match conn.prepare(
+        "SELECT field_name, field_type FROM _database_metadata WHERE table_name = ?1 ORDER BY ROWID"
+    ) {
+        Ok(stmt) => stmt,
+        Err(err) => {
+            return Ok(HttpResponse::InternalServerError().json(Response {
+                success: false,
+                message: format!("Failed to prepare metadata query: {}", err),
+            }));
+        }
+    };
+
+    let fields: Result<Vec<(String, String)>, _> = stmt
+        .query_map([&table_name], |row| {
+            Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
+        })
+        .and_then(|mapped_rows| mapped_rows.collect());
+
+    let fields = match fields {
+        Ok(fields) => fields,
+        Err(err) => {
+            return Ok(HttpResponse::InternalServerError().json(Response {
+                success: false,
+                message: format!("Failed to fetch field definitions: {}", err),
+            }));
+        }
+    };
+
+    let field_names: Vec<String> = fields
+        .iter()
+        .map(|(name, _)| format!("\"{}\"", name))
+        .collect();
+    let placeholders: Vec<String> = (1..=fields.len()).map(|i| format!("?{}", i)).collect();
+
+    let insert_sql = format!(
+        "INSERT INTO \"{}\" ({}) VALUES ({})",
+        table_name,
+        field_names.join(", "),
+        placeholders.join(", ")
+    );
+
+    let params = rusqlite::params_from_iter(fields.iter().map(|(field_name, field_type)| {
+        let value = data.get(field_name);
+
+        match (value, field_type.as_str()) {
+            (Some(v), "INTEGER") if v.is_i64() => {
+                Box::new(v.as_i64().unwrap()) as Box<dyn rusqlite::ToSql>
+            }
+            (Some(v), "BOOLEAN") if v.is_boolean() => {
+                Box::new(if v.as_bool().unwrap() { 1i64 } else { 0i64 }) as Box<dyn rusqlite::ToSql>
+            }
+            (Some(v), "DECIMAL") if v.is_f64() => {
+                Box::new(v.as_f64().unwrap()) as Box<dyn rusqlite::ToSql>
+            }
+            (Some(v), _) if v.is_string() => {
+                Box::new(v.as_str().unwrap().to_string()) as Box<dyn rusqlite::ToSql>
+            }
+            _ => Box::new(rusqlite::types::Null) as Box<dyn rusqlite::ToSql>,
+        }
+    }));
+
+    if let Err(err) = conn.execute(&insert_sql, params) {
+        return Ok(HttpResponse::InternalServerError().json(Response {
+            success: false,
+            message: format!("Failed to insert record: {}", err),
+        }));
+    }
+
+    Ok(HttpResponse::Ok().json(Response {
+        success: true,
+        message: format!("Record created successfully in '{}'", table_name),
+    }))
 }
 
 #[post("/get-collection-records")]

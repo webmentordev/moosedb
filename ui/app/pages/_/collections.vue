@@ -19,7 +19,7 @@
                     record</button>
             </div>
 
-            <AppCreateRecord v-model:record_show="record_show" />
+            <AppCreateRecord v-model:record_show="record_show" :columns="columns" :collection_id="active_tb" />
 
             <AppTable :records="records" :columns="columns" />
 
@@ -43,9 +43,9 @@
 </template>
 
 <script setup>
-// definePageMeta({
-//     middleware: 'auth'
-// });
+definePageMeta({
+    middleware: 'auth'
+});
 const errors = ref({
     message: null,
     count: 0
@@ -64,20 +64,31 @@ const collections = ref([]);
 const route = useRoute();
 const active_tb = ref(null);
 const active_tb_name = ref(null);
+
 if (route.query.tb) {
     active_tb.value = route.query.tb;
     await get_collection(active_tb.value)
 }
+
+await fetch_collections();
+
+if (active_tb.value && collections.value.length > 0) {
+    const value = collections.value.find(item => item.table_id == active_tb.value);
+    if (value) {
+        active_tb_name.value = value.table_name;
+    }
+}
+
 watch(() => route.query.tb, async (newTb) => {
     active_tb.value = newTb || null;
     if (active_tb.value) {
         await get_collection(active_tb.value)
+        const value = collections.value.find(item => item.table_id == active_tb.value);
+        if (value) {
+            active_tb_name.value = value.table_name;
+        }
     }
-    const value = collections.value.find(item => item.table_id == active_tb.value);
-    active_tb_name.value = value.table_name;
 });
-
-await fetch_collections();
 
 async function fetch_collections() {
     try {

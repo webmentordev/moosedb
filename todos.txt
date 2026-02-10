@@ -42,6 +42,9 @@ x create new super admin API
     X default hash for encryption
     X use default token created in the DB
 - create token validation api
+- create records
+    x create records api
+    - send created_at and updated_at data with the api 
 - secure login routes
     X create api for login
     X create api for signout
