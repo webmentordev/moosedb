@@ -3,18 +3,18 @@ This file is just to keep track of progress and new features to add
 --------------------
 # Improvements
 --------------------
-X refactor the code into modules/files for clear understanding
+x refactor the code into modules/files for clear understanding
 
 --------------------
 # Nuxt (Frontend)
 --------------------
-X setup login api calls
-X create login validation system
-X create default token validation middleware
-X create composables for API calls
-X create composables for token validation
-X create guest auth for login page
-X add rish text editor
+x setup login api calls
+x create login validation system
+x create default token validation middleware
+x create composables for API calls
+x create composables for token validation
+x create guest auth for login page
+x add rish text editor
 - active table indicator
 - UI to show records in the table
 - render Nuxt error page
@@ -26,7 +26,7 @@ X add rish text editor
 # Actix (Backend)
 --------------------
 - create session validation system like Laravel
-X use column names
+x use column names
 - create logs database
 - request logging
     - store request in the database.sqlite
@@ -34,20 +34,21 @@ X use column names
 x create new super admin API
     - short error message and send in json
 - add cli commands parsing
-    X create serve command
-    X create update password command
-    X add command to change port
+    x create serve command
+    x create update password command
+    x add command to change port
     x update secret token
 - fill default configurations
-    X default hash for encryption
-    X use default token created in the DB
+    x default hash for encryption
+    x use default token created in the DB
 - create token validation api
 - create records
     x create records api
-    - send created_at and updated_at data with the api 
+    x send created_at and updated_at data with the api 
+    x add created_at and updated_at
 - secure login routes
-    X create api for login
-    X create api for signout
+    x create api for login
+    x create api for signout
 - secure super admin routes
     - create api for updating password from dashboard
     x create cli command for updating password
@@ -61,7 +62,7 @@ x create new super admin API
         - soft delete the collection
         - list soft deleted collection to the admin
     - delete files when collection is deleted
-    X fetch all table records
+    x fetch all table records
     - show all records
     - show data in pagination
 - Public collection API
@@ -72,6 +73,6 @@ x create new super admin API
 ------------------------------------------------------------
 Critical Errors
 ------------------------------------------------------------
-X Fix column types in Frontend and backend
+x Fix column types in Frontend and backend
 x fix the collections listing click issue
 - optimize all API responses to trycatch friendly 

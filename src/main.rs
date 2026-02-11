@@ -547,6 +547,14 @@ async fn get_collection_records(
         field_type: "INTEGER".to_string(),
     }];
     all_columns.extend(columns_info);
+    all_columns.push(ColumnInfo {
+        name: "created_at".to_string(),
+        field_type: "TIMESTAMP".to_string(),
+    });
+    all_columns.push(ColumnInfo {
+        name: "updated_at".to_string(),
+        field_type: "TIMESTAMP".to_string(),
+    });
 
     let mut stmt = match conn.prepare(&format!("SELECT * FROM \"{}\"", table_name)) {
         Ok(stmt) => stmt,
@@ -755,7 +763,7 @@ async fn get_super_admins(app_data: web::Data<AppData>) -> Result<HttpResponse, 
             Ok(serde_json::json!({
                 "name": row.get::<_, String>(0)?,
                 "email": row.get::<_, String>(1)?,
-                "created_at": row.get::<_, String>(2)?,
+                "created_at": row.get::<_, String>(2)?
             }))
         })
         .and_then(|mapped_rows| mapped_rows.collect());
@@ -874,6 +882,8 @@ async fn create_collection(
             nullable BOOLEAN NOT NULL,
             min INTEGER,
             max INTEGER,
+            created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+            updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
             PRIMARY KEY (table_name, field_name)
         )";
 
@@ -910,7 +920,7 @@ async fn create_collection(
             if field.field_type == "VARCHAR" || field.field_type == "TEXT" {
                 field_def.push_str(&format!(" CHECK(length(\"{}\") >= {})", field.title, min));
             } else if field.field_type == "INTEGER" || field.field_type == "FLOAT" {
-                field_def.push_str(&format!(" CHECK(\"{}\") >= {})", field.title, min));
+                field_def.push_str(&format!(" CHECK(\"{}\" >= {})", field.title, min));
             }
         }
 
@@ -918,13 +928,15 @@ async fn create_collection(
             if field.field_type == "VARCHAR" || field.field_type == "TEXT" {
                 field_def.push_str(&format!(" CHECK(length(\"{}\") <= {})", field.title, max));
             } else if field.field_type == "INTEGER" || field.field_type == "FLOAT" {
-                field_def.push_str(&format!(" CHECK(\"{}\") <= {})", field.title, max));
+                field_def.push_str(&format!(" CHECK(\"{}\" <= {})", field.title, max));
             }
         }
 
         create_table_sql.push_str(&field_def);
     }
 
+    create_table_sql.push_str(", created_at TEXT DEFAULT CURRENT_TIMESTAMP");
+    create_table_sql.push_str(", updated_at TEXT DEFAULT CURRENT_TIMESTAMP");
     create_table_sql.push_str(")");
 
     if let Err(err) = conn.execute(&create_table_sql, []) {
