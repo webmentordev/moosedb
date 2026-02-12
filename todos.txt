@@ -66,7 +66,8 @@ x create new super admin API
     - show all records
     - show data in pagination
 - Public collection API
-    - send data in json from
+    x send collection data
+    - send only records with the API, no message
     - add pagination in the data
     - send 1 record api
 
