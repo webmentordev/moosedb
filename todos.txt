@@ -68,7 +68,8 @@ x create new super admin API
 - Public collection API
     x send collection data
     - send only records with the API, no message
-    - add pagination in the data
+    x add pagination in the data
+    x send the records info total, remaining, sent, pagies
     - send 1 record api
 
 ------------------------------------------------------------

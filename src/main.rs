@@ -587,20 +587,51 @@ async fn get_collection(
     }))
 }
 
+#[derive(Deserialize)]
+struct PaginationParams {
+    page: Option<u32>,
+    items: Option<u32>,
+}
+
+#[derive(Serialize)]
+struct RecordsResponse {
+    success: bool,
+    message: String,
+    records: Option<Vec<serde_json::Value>>,
+    pagination: Option<PaginationInfo>,
+}
+
+#[derive(Serialize)]
+struct PaginationInfo {
+    current_page: u32,
+    items_per_page: u32,
+    total_records: i64,
+    total_pages: u32,
+    records_shown: usize,
+    has_next_page: bool,
+    has_prev_page: bool,
+    next_page: Option<String>,
+    prev_page: Option<String>,
+}
+
 #[get("/records/{collection_id}")]
 async fn get_collection_data(
     data: web::Data<AppData>,
     path: web::Path<String>,
-) -> Result<impl Responder> {
+    query: web::Query<PaginationParams>,
+) -> Result<HttpResponse, Error> {
     let collection_id = path.into_inner();
+    let page = query.page.unwrap_or(1).max(1);
+    let items_per_page = query.items.unwrap_or(100).clamp(1, 10000);
 
     let conn = match data.database.get() {
         Ok(conn) => conn,
         Err(err) => {
-            return Ok(HttpResponse::InternalServerError().json(CollectionData {
+            return Ok(HttpResponse::InternalServerError().json(RecordsResponse {
                 success: false,
                 message: format!("Failed to get database connection: {}", err),
                 records: None,
+                pagination: None,
             }));
         }
     };
@@ -612,10 +643,11 @@ async fn get_collection_data(
     );
 
     if let Ok(0) = metadata_exists {
-        return Ok(HttpResponse::NotFound().json(CollectionData {
+        return Ok(HttpResponse::NotFound().json(RecordsResponse {
             success: false,
             message: "Metadata table does not exist".to_string(),
             records: None,
+            pagination: None,
         }));
     }
 
@@ -628,28 +660,55 @@ async fn get_collection_data(
     let table_name = match table_name {
         Ok(name) => name,
         Err(rusqlite::Error::QueryReturnedNoRows) => {
-            return Ok(HttpResponse::NotFound().json(CollectionData {
+            return Ok(HttpResponse::NotFound().json(RecordsResponse {
                 success: false,
                 message: "Collection not found".to_string(),
                 records: None,
+                pagination: None,
             }));
         }
         Err(err) => {
-            return Ok(HttpResponse::InternalServerError().json(CollectionData {
+            return Ok(HttpResponse::InternalServerError().json(RecordsResponse {
                 success: false,
                 message: format!("Failed to query collection: {}", err),
                 records: None,
+                pagination: None,
             }));
         }
     };
 
-    let mut stmt = match conn.prepare(&format!("SELECT * FROM \"{}\"", table_name)) {
+    let total_records: i64 = match conn.query_row(
+        &format!("SELECT COUNT(*) FROM \"{}\"", table_name),
+        [],
+        |row| row.get(0),
+    ) {
+        Ok(count) => count,
+        Err(err) => {
+            return Ok(HttpResponse::InternalServerError().json(RecordsResponse {
+                success: false,
+                message: format!("Failed to count records: {}", err),
+                records: None,
+                pagination: None,
+            }));
+        }
+    };
+
+    let total_pages = ((total_records as f64) / (items_per_page as f64)).ceil() as u32;
+    let offset = (page - 1) * items_per_page;
+
+    let query_sql = format!(
+        "SELECT * FROM \"{}\" LIMIT {} OFFSET {}",
+        table_name, items_per_page, offset
+    );
+
+    let mut stmt = match conn.prepare(&query_sql) {
         Ok(stmt) => stmt,
         Err(err) => {
-            return Ok(HttpResponse::InternalServerError().json(CollectionData {
+            return Ok(HttpResponse::InternalServerError().json(RecordsResponse {
                 success: false,
                 message: format!("Failed to prepare query: {}", err),
                 records: None,
+                pagination: None,
             }));
         }
     };
@@ -675,20 +734,63 @@ async fn get_collection_data(
     }) {
         Ok(rows) => rows,
         Err(err) => {
-            return Ok(HttpResponse::InternalServerError().json(CollectionData {
+            return Ok(HttpResponse::InternalServerError().json(RecordsResponse {
                 success: false,
                 message: format!("Failed to query records: {}", err),
                 records: None,
+                pagination: None,
             }));
         }
     };
 
     let records: Vec<serde_json::Value> = rows.filter_map(|r| r.ok()).collect();
+    let records_shown = records.len();
 
-    Ok(HttpResponse::Ok().json(CollectionData {
+    let has_next_page = page < total_pages;
+    let has_prev_page = page > 1;
+
+    let next_page = if has_next_page {
+        Some(format!(
+            "/records/{}?page={}&items={}",
+            collection_id,
+            page + 1,
+            items_per_page
+        ))
+    } else {
+        None
+    };
+
+    let prev_page = if has_prev_page {
+        Some(format!(
+            "/records/{}?page={}&items={}",
+            collection_id,
+            page - 1,
+            items_per_page
+        ))
+    } else {
+        None
+    };
+
+    let pagination = PaginationInfo {
+        current_page: page,
+        items_per_page,
+        total_records,
+        total_pages,
+        records_shown,
+        has_next_page,
+        has_prev_page,
+        next_page,
+        prev_page,
+    };
+
+    Ok(HttpResponse::Ok().json(RecordsResponse {
         success: true,
-        message: format!("Retrieved {} records from '{}'", records.len(), table_name),
+        message: format!(
+            "Retrieved {} of {} total records from '{}' (page {}/{})",
+            records_shown, total_records, table_name, page, total_pages
+        ),
         records: Some(records),
+        pagination: Some(pagination),
     }))
 }
 
