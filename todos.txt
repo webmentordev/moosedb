@@ -71,6 +71,7 @@ x create new super admin API
     x add pagination in the data
     x send the records info total, remaining, sent, pagies
     - send 1 record api
+    - use random string for record ids
 
 ------------------------------------------------------------
 Critical Errors
