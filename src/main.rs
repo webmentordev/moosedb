@@ -410,11 +410,12 @@ async fn create_record(
         }
     };
 
-    let field_names: Vec<String> = fields
-        .iter()
-        .map(|(name, _)| format!("\"{}\"", name))
-        .collect();
-    let placeholders: Vec<String> = (1..=fields.len()).map(|i| format!("?{}", i)).collect();
+    let generated_id = format!("moo{}", moosedb::simple_uid(12));
+
+    let mut field_names: Vec<String> = vec!["\"id\"".to_string()];
+    field_names.extend(fields.iter().map(|(name, _)| format!("\"{}\"", name)));
+
+    let placeholders: Vec<String> = (1..=field_names.len()).map(|i| format!("?{}", i)).collect();
 
     let insert_sql = format!(
         "INSERT INTO \"{}\" ({}) VALUES ({})",
@@ -423,7 +424,9 @@ async fn create_record(
         placeholders.join(", ")
     );
 
-    let params = rusqlite::params_from_iter(fields.iter().map(|(field_name, field_type)| {
+    let mut params: Vec<Box<dyn rusqlite::ToSql>> = vec![Box::new(generated_id)];
+
+    params.extend(fields.iter().map(|(field_name, field_type)| {
         let value = data.get(field_name);
 
         match (value, field_type.as_str()) {
@@ -443,7 +446,9 @@ async fn create_record(
         }
     }));
 
-    if let Err(err) = conn.execute(&insert_sql, params) {
+    let params_refs: Vec<&dyn rusqlite::ToSql> = params.iter().map(|p| p.as_ref()).collect();
+
+    if let Err(err) = conn.execute(&insert_sql, params_refs.as_slice()) {
         return Ok(HttpResponse::InternalServerError().json(Response {
             success: false,
             message: format!("Failed to insert record: {}", err),
@@ -1367,7 +1372,7 @@ async fn create_collection(
     let table_id = format!("moo_{}", random_numbers(9));
 
     let mut create_table_sql = format!(
-        "CREATE TABLE \"{}\" (id INTEGER PRIMARY KEY AUTOINCREMENT",
+        "CREATE TABLE \"{}\" (id TEXT PRIMARY KEY NOT NULL",
         data.collection
     );
 

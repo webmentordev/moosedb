@@ -3,9 +3,10 @@
         <div class="w-full h-full flex justify-end" @click.self="closeModal">
             <div class="w-137.5 h-full border-l border-white/10 bg-light p-6 overflow-y-auto">
                 <h1 class="text-2xl">Create new record</h1>
+                <p>Record ID and creation time will be auto generated.</p>
                 <div class="mt-3">
-                    <div v-for="column in columns.filter(col => col.name !== 'id')" :key="column.name"
-                        class="flex flex-col mb-4">
+                    <div v-for="column in columns.filter(col => col.name !== 'id' && col.name !== 'created_at' && col.name !== 'updated_at')"
+                        :key="column.name" class="flex flex-col mb-4">
                         <AppLabel :text="column.name" />
 
                         <AppInput v-if="column.field_type === 'VARCHAR'" v-model="form_data[column.name]" type="text"

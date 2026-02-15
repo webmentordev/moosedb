@@ -19,6 +19,8 @@ x add rish text editor
 - UI to show records in the table
 - render Nuxt error page
 - improve active tab deetection
+x Hide created_at & updated_at from Create Record
+- Fix the Quill Editor Tools and Imrpove UI
 
 
 
@@ -46,6 +48,8 @@ x create new super admin API
     x create records api
     x send created_at and updated_at data with the api 
     x add created_at and updated_at
+    - show record after creation, no need to refresh
+    - 
 - secure login routes
     x create api for login
     x create api for signout
