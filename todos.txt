@@ -18,15 +18,21 @@ x add rish text editor
 - active table indicator
 - UI to show records in the table
 - render Nuxt error page
-- improve active tab deetection
+x improve active tab/collection detection
 x Hide created_at & updated_at from Create Record
 - Fix the Quill Editor Tools and Imrpove UI
+- use Component for Success messages
+x now record message if collection is empty!
 
 
 
 --------------------
 # Actix (Backend)
 --------------------
+- Global Settings
+    x update app name api
+    x add default pagination size in settings 
+    - update pagination size API
 - create session validation system like Laravel
 x use column names
 - create logs database
@@ -49,7 +55,6 @@ x create new super admin API
     x send created_at and updated_at data with the api 
     x add created_at and updated_at
     - show record after creation, no need to refresh
-    - 
 - secure login routes
     x create api for login
     x create api for signout
@@ -67,15 +72,17 @@ x create new super admin API
         - list soft deleted collection to the admin
     - delete files when collection is deleted
     x fetch all table records
-    - show all records
+    - send latest records first
     - show data in pagination
 - Public collection API
     x send collection data
     - send only records with the API, no message
     x add pagination in the data
     x send the records info total, remaining, sent, pagies
-    - send 1 record api
-    - use random string for record ids
+    x send 1 record api
+    x use random string for record ids
+    - search records API
+    - follow default pagination size from settings
 
 ------------------------------------------------------------
 Critical Errors

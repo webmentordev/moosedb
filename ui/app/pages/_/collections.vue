@@ -14,12 +14,13 @@
                             width="20"></button>
                 </div>
                 <button @click="record_show = true"
-                    class="py-2 px-4 bg-main hover:bg-main/10 disabled:bg-gray-400 text-white rounded-xl font-semibold">+
+                    class="py-2 px-3 bg-main hover:bg-main/10 disabled:bg-gray-400 text-white rounded-xl font-semibold text-sm">+
                     New
                     record</button>
             </div>
 
-            <AppCreateRecord v-model:record_show="record_show" :columns="columns" :collection_id="active_tb" />
+            <AppCreateRecord v-model:record_show="record_show" :columns="columns" :collection_id="active_tb"
+                @fetch-data="get_collection(active_tb)" />
 
             <AppTable :records="records" :columns="columns" />
 
