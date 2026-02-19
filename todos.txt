@@ -23,6 +23,7 @@ x Hide created_at & updated_at from Create Record
 - Fix the Quill Editor Tools and Imrpove UI
 - use Component for Success messages
 x now record message if collection is empty!
+x render text field as HTML
 
 
 

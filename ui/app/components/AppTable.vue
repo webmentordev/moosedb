@@ -16,20 +16,21 @@
                         <template v-if="isDateTimeColumn(column.name)">
                             {{ formatDateTime(record[column.name]) }}
                         </template>
-                        <template v-else-if="shouldTruncate(column.name, record[column.name])">
-                            <span v-if="!isExpanded(index, column.name)">
-                                {{ truncateText(record[column.name]) }}
-                                <button @click="toggleExpand(index, column.name)"
-                                    class="ml-1 text-blue-600 hover:text-blue-800 font-medium">
-                                    read more
-                                </button>
+                        <template v-else-if="column.field_type === 'TEXT'">
+                            <span
+                                v-if="!isExpanded(index, column.name) && shouldTruncate(column.name, record[column.name])"
+                                v-html="truncateText(record[column.name])" @click="toggleExpand(index, column.name)"
+                                class="cursor-pointer hover:text-para">
                             </span>
-                            <span v-else>
-                                {{ record[column.name] }}
-                                <button @click="toggleExpand(index, column.name)"
-                                    class="ml-1 text-blue-600 hover:text-blue-800 font-medium">
-                                    show less
-                                </button>
+                            <span v-else v-html="record[column.name]"
+                                @click="shouldTruncate(column.name, record[column.name]) && toggleExpand(index, column.name)"
+                                :class="{ 'cursor-pointer hover:text-para': shouldTruncate(column.name, record[column.name]) }">
+                            </span>
+                        </template>
+                        <template v-else-if="shouldTruncate(column.name, record[column.name])">
+                            <span @click="toggleExpand(index, column.name)" class="cursor-pointer hover:text-para">
+                                {{ isExpanded(index, column.name) ? record[column.name] :
+                                truncateText(record[column.name]) }}
                             </span>
                         </template>
                         <template v-else>
@@ -84,7 +85,7 @@ const shouldTruncate = (columnName, value) => {
 };
 
 const truncateText = (text) => {
-    return String(text).substring(0, 20) + '...';
+    return String(text).substring(0, 15) + '...';
 };
 
 const isExpanded = (rowIndex, columnName) => {
