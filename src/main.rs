@@ -114,6 +114,7 @@ struct GetSetting {
 struct SendSetting {
     success: bool,
     value: String,
+    message: String,
 }
 
 #[derive(Deserialize)]
@@ -302,15 +303,25 @@ async fn get_setting(
     request: web::Json<GetSetting>,
 ) -> Result<impl Responder> {
     let configs = data.configs.read().unwrap();
-    match configs.get(&request.key) {
-        Some(value) => Ok(web::Json(SendSetting {
-            success: true,
-            value: value.clone(),
-        })),
-        None => Ok(web::Json(SendSetting {
+    if &request.key != "secret" {
+        match configs.get(&request.key) {
+            Some(value) => Ok(web::Json(SendSetting {
+                success: true,
+                value: value.clone(),
+                message: "Value has been found".to_string(),
+            })),
+            None => Ok(web::Json(SendSetting {
+                success: false,
+                value: String::new(),
+                message: "Value does not exist! creating new value.".to_string(),
+            })),
+        }
+    } else {
+        Ok(web::Json(SendSetting {
             success: false,
             value: String::new(),
-        })),
+            message: "Action is not allowed!".to_string(),
+        }))
     }
 }
 
@@ -319,20 +330,28 @@ async fn update_setting(
     data: web::Data<AppData>,
     request: web::Json<UpdateSetting>,
 ) -> Result<impl Responder> {
-    match moosedb::update_setting(request.key.to_string(), request.value.to_string()) {
-        Ok(_) => {
-            let mut configs = data.configs.write().unwrap();
-            configs.insert(request.key.to_string(), request.value.to_string());
+    let key = request.key.to_string();
+    if key != "secret".to_string() {
+        match moosedb::update_setting(key.clone(), request.value.to_string()) {
+            Ok(_) => {
+                let mut configs = data.configs.write().unwrap();
+                configs.insert(key.clone(), request.value.to_string());
 
-            Ok(web::Json(Response {
-                success: true,
-                message: "Setting updated successfully".to_string(),
-            }))
+                Ok(web::Json(Response {
+                    success: true,
+                    message: "Setting updated successfully".to_string(),
+                }))
+            }
+            Err(err) => Ok(web::Json(Response {
+                success: false,
+                message: err.to_string(),
+            })),
         }
-        Err(err) => Ok(web::Json(Response {
+    } else {
+        Ok(web::Json(Response {
             success: false,
-            message: err.to_string(),
-        })),
+            message: "Action is not allowed".to_string(),
+        }))
     }
 }
 

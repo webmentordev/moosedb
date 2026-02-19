@@ -6,6 +6,7 @@
             <AlertsError v-if="errors.message" :message="errors.message" />
             <AppLoading v-if="processing" message="Processing..." />
             <form @submit.prevent="update_appname" method="post" class="flex flex-col mt-3">
+                <h3 class="mb-1 ml-1 text-gray-300">App name</h3>
                 <div class="flex items-center w-full">
                     <AppInput type="text" v-model="appname" placeholder="Application name" />
                     <button v-if="!processing" type="submit"
@@ -14,6 +15,18 @@
                     </button>
                 </div>
                 <AlertsAlertError v-if="errors.appname" error="App name is required." />
+            </form>
+
+            <form @submit.prevent="updated_records_per_page" method="post" class="flex flex-col mt-3">
+                <h3 class="mb-1 ml-1 text-gray-300">Records per page</h3>
+                <div class="flex items-center w-full">
+                    <AppInput type="number" v-model="pagination" placeholder="Record per page (pagination)" />
+                    <button v-if="!processing" type="submit"
+                        class="bg-main ml-2 max-w-25 text-white w-full py-2 rounded-xl flex items-center justify-center hover:bg-main/90 group">
+                        <span class="mr-3">Update</span>
+                    </button>
+                </div>
+                <AlertsAlertError v-if="errors.pagination" error="Pagination is required. Must be greater then 0" />
             </form>
 
             <form @submit.prevent="add_new_admin" method="post" class="flex flex-col bg-dark p-6 rounded-xl mt-4">
@@ -69,6 +82,7 @@ const super_admins = ref([]);
 const super_columns = ref([]);
 
 const appname = ref("");
+const pagination = ref(0);
 const name = ref("");
 const email = ref("");
 const password = ref("");
@@ -77,6 +91,7 @@ const response = ref(null);
 const processing = ref(false);
 const errors = ref({
     appname: null,
+    pagination: null,
     name: null,
     email: null,
     password: null,
@@ -99,6 +114,22 @@ try {
         appname.value = data.value;
     } else {
         appname.value = "Unknown";
+    }
+} catch (error) {
+    console.error('Failed to fetch:', error);
+}
+
+try {
+    const data = await authFetch('/admin/api/get-setting', {
+        method: "POST",
+        body: {
+            key: "records_per_page"
+        }
+    });
+    if (data.success == true) {
+        pagination.value = data.value;
+    } else {
+        pagination.value = "Unknown";
     }
 } catch (error) {
     console.error('Failed to fetch:', error);
@@ -131,6 +162,41 @@ async function update_appname() {
                 body: {
                     key: "appname",
                     value: appname.value
+                }
+            });
+            if (data.success == true) {
+                response.value = data.message;
+            } else {
+                errors.value.message = data.message;
+            }
+        } catch (error) {
+            console.error('Failed to fetch:', error);
+        } finally {
+            processing.value = false;
+        }
+    }
+}
+
+
+// Update records_per_page
+async function updated_records_per_page() {
+    reset_values();
+    if (pagination.value.trim() == "") {
+        errors.value.pagination = "required";
+        errors.value.count += 1;
+    }
+    if (pagination.value.trim() <= 0) {
+        errors.value.pagination = "required";
+        errors.value.count += 1;
+    }
+    if (errors.value.count == 0) {
+        processing.value = true;
+        try {
+            const data = await authFetch('/admin/api/update-setting', {
+                method: "POST",
+                body: {
+                    key: "records_per_page",
+                    value: pagination.value
                 }
             });
             if (data.success == true) {
@@ -198,6 +264,7 @@ function reset_values() {
     response.value = null;
     errors.value = {
         appname: null,
+        pagination: null,
         name: null,
         email: null,
         password: null,

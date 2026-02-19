@@ -34,6 +34,10 @@ x render text field as HTML
     x update app name api
     x add default pagination size in settings 
     - update pagination size API
+        - update the updated_at date too
+    - update the updated_at date for all settings
+    x secure secret update from dashboard or API
+    x don't get secret key from dashboard or API
 - create session validation system like Laravel
 x use column names
 - create logs database
@@ -55,7 +59,7 @@ x create new super admin API
     x create records api
     x send created_at and updated_at data with the api 
     x add created_at and updated_at
-    - show record after creation, no need to refresh
+    x show record after creation, no need to refresh
 - secure login routes
     x create api for login
     x create api for signout

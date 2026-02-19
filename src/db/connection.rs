@@ -149,7 +149,7 @@ pub fn update_setting(key: String, new_value: String) -> Result<()> {
     let conn = Connection::open("database.sqlite")?;
 
     let updated = conn.execute(
-        "UPDATE _configs SET value = ?1 WHERE key = ?2",
+        "UPDATE _configs SET value = ?1, updated_at = CURRENT_TIMESTAMP WHERE key = ?2",
         params![new_value, key],
     )?;
 
