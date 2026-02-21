@@ -102,6 +102,8 @@
 </template>
 
 <script setup>
+const { removeToken } = useAuthToken();
+
 const super_admins = ref([]);
 const super_columns = ref([]);
 
@@ -317,6 +319,8 @@ async function updated_password() {
             });
             if (data.success == true) {
                 response.value = data.message;
+                removeToken();
+                await navigateTo('/_/auth/login');
             } else {
                 errors.value.message = data.message;
             }
