@@ -29,6 +29,30 @@
                 <AlertsAlertError v-if="errors.pagination" error="Pagination is required. Must be greater then 0" />
             </form>
 
+            <form @submit.prevent="updated_password" method="post" class="flex flex-col bg-dark p-6 rounded-xl mt-4">
+                <h3 class="text-lg">Change your password</h3>
+                <div class="grid grid-cols-2 gap-3 w-full mt-3">
+                    <div class="flex flex-col">
+                        <AppInput class="bg-light" type="password" v-model="new_password" placeholder="New Password"
+                            required />
+                        <AlertsAlertError v-if="errors.new_password" error="New Password is required." />
+                        <AlertsAlertError v-if="errors.password_match"
+                            error="New Password and confirm password do not match." />
+                    </div>
+                    <div class="flex flex-col">
+                        <AppInput class="bg-light" type="password" v-model="confirm_new_password"
+                            placeholder="Confirm new password" required />
+                        <AlertsAlertError v-if="errors.confirm_new_password" error="Confirm password is required." />
+                    </div>
+                    <button v-if="!processing" type="submit"
+                        class="bg-main text-white w-full py-3 rounded-xl flex items-center justify-center hover:bg-main/90 group col-span-2">
+                        <span class="mr-3">Update your password</span>
+                        <img class="mt-1 transition-all group-hover:transition-all group-hover:translate-x-4"
+                            src="https://api.iconify.design/line-md:arrow-right.svg?color=%23ffffff" width="15">
+                    </button>
+                </div>
+            </form>
+
             <form @submit.prevent="add_new_admin" method="post" class="flex flex-col bg-dark p-6 rounded-xl mt-4">
                 <h3 class="text-lg">Create new super admin</h3>
                 <div class="grid grid-cols-2 gap-3 w-full mt-3">
@@ -82,6 +106,8 @@ const super_admins = ref([]);
 const super_columns = ref([]);
 
 const appname = ref("");
+const new_password = ref("");
+const confirm_new_password = ref("");
 const pagination = ref(0);
 const name = ref("");
 const email = ref("");
@@ -92,6 +118,9 @@ const processing = ref(false);
 const errors = ref({
     appname: null,
     pagination: null,
+    new_password: null,
+    confirm_new_password: null,
+    password_match: null,
     name: null,
     email: null,
     password: null,
@@ -260,11 +289,54 @@ async function add_new_admin() {
     }
 }
 
+
+// Update logged in user's password
+async function updated_password() {
+    reset_values();
+    if (new_password.value.trim() == "") {
+        errors.value.new_password = "required";
+        errors.value.count += 1;
+    }
+    if (confirm_new_password.value.trim() == "") {
+        errors.value.confirm_new_password = "required";
+        errors.value.count += 1;
+    }
+    if (new_password.value.trim() != confirm_new_password.value.trim()) {
+        errors.value.password_match = "true";
+        errors.value.count += 1;
+    }
+    if (errors.value.count == 0) {
+        processing.value = true;
+        try {
+            const data = await authFetch('/admin/api/update-your-password', {
+                method: "POST",
+                body: {
+                    new_password: new_password.value,
+                    confirm_new_password: confirm_new_password.value
+                }
+            });
+            if (data.success == true) {
+                response.value = data.message;
+            } else {
+                errors.value.message = data.message;
+            }
+        } catch (error) {
+            console.error('Failed to fetch:', error);
+        } finally {
+            processing.value = false;
+        }
+    }
+}
+
+
 function reset_values() {
     response.value = null;
     errors.value = {
         appname: null,
         pagination: null,
+        new_password: null,
+        confirm_new_password: null,
+        password_match: null,
         name: null,
         email: null,
         password: null,

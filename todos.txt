@@ -64,7 +64,7 @@ x create new super admin API
     x create api for login
     x create api for signout
 - secure super admin routes
-    - create api for updating password from dashboard
+    x create api for updating password from dashboard
     x create cli command for updating password
 - add email sending feature
     - add saving smtp creds

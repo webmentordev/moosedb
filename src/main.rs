@@ -5,7 +5,7 @@ use actix_web::{
 };
 use actix_web_httpauth::extractors::bearer::BearerAuth;
 use actix_web_httpauth::middleware::HttpAuthentication;
-use bcrypt::verify;
+use bcrypt::{DEFAULT_COST, hash, verify};
 use clap::{Parser, Subcommand};
 use env_logger::Builder;
 use jsonwebtoken::{DecodingKey, EncodingKey, Header, Validation, decode, encode};
@@ -13,6 +13,7 @@ use mime_guess::from_path;
 use moosedb::random_numbers;
 use r2d2::Pool;
 use r2d2_sqlite::SqliteConnectionManager;
+use rusqlite::params;
 use rust_embed::RustEmbed;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -248,7 +249,8 @@ async fn main() -> std::io::Result<()> {
                             .service(get_collection_records)
                             .service(create_super_admin)
                             .service(get_super_admins)
-                            .service(create_record),
+                            .service(create_record)
+                            .service(update_your_password),
                     )
                     .service(
                         web::scope("/api")
@@ -610,6 +612,85 @@ async fn get_collection(
         message: format!("Retrieved {} records from '{}'", records.len(), table_name),
         records: Some(records),
     }))
+}
+
+#[derive(Deserialize)]
+struct UpdatePasswordRequest {
+    new_password: String,
+    confirm_new_password: String,
+}
+
+#[post("/update-your-password")]
+async fn update_your_password(
+    req: HttpRequest,
+    body: web::Json<UpdatePasswordRequest>,
+    data: web::Data<AppData>,
+) -> impl Responder {
+    if body.new_password.trim().is_empty() || body.confirm_new_password.trim().is_empty() {
+        return HttpResponse::BadRequest().json(serde_json::json!({
+            "success": false,
+            "message": "Password fields cannot be empty"
+        }));
+    }
+
+    if body.new_password != body.confirm_new_password {
+        return HttpResponse::BadRequest().json(serde_json::json!({
+            "success": false,
+            "message": "Passwords do not match"
+        }));
+    }
+
+    let email = match req.extensions().get::<Claims>().map(|c| c.email.clone()) {
+        Some(e) => e,
+        None => {
+            return HttpResponse::Unauthorized().json(serde_json::json!({
+                "success": false,
+                "message": "Unauthorized"
+            }));
+        }
+    };
+
+    let pool = data.database.clone();
+    let new_password = body.new_password.clone();
+
+    let result = web::block(move || -> Result<bool, Box<dyn std::error::Error + Send + Sync>> {
+        let conn = pool.get()?;
+
+        let exists: bool = conn.query_row(
+            "SELECT EXISTS(SELECT 1 FROM _super_admins WHERE email = ?1)",
+            params![email],
+            |row| row.get(0),
+        )?;
+
+        if !exists {
+            return Ok(false);
+        }
+
+        let hashed = hash(new_password, DEFAULT_COST)?;
+
+        conn.execute(
+            "UPDATE _super_admins SET password = ?1, updated_at = CURRENT_TIMESTAMP WHERE email = ?2",
+            params![hashed, email],
+        )?;
+
+        Ok(true)
+    })
+    .await;
+
+    match result {
+        Ok(Ok(true)) => HttpResponse::Ok().json(serde_json::json!({
+            "success": true,
+            "message": "Password updated successfully"
+        })),
+        Ok(Ok(false)) => HttpResponse::NotFound().json(serde_json::json!({
+            "success": false,
+            "message": "User not found"
+        })),
+        _ => HttpResponse::InternalServerError().json(serde_json::json!({
+            "success": false,
+            "message": "Failed to update password"
+        })),
+    }
 }
 
 #[derive(Deserialize)]
