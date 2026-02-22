@@ -24,8 +24,6 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: "lts/*"
-          cache: "npm"
-          cache-dependency-path: ui/package-lock.json
 
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
@@ -35,7 +33,7 @@ jobs:
 
       - name: Install UI dependencies
         working-directory: ui
-        run: npm ci
+        run: npm install
 
       - name: Build UI (Nuxt generate)
         working-directory: ui
