@@ -17,7 +17,7 @@ use rusqlite::params;
 use rust_embed::RustEmbed;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use std::fs::OpenOptions;
+// use std::fs::OpenOptions;
 use std::path::Path;
 use std::sync::{Arc, RwLock};
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -201,14 +201,17 @@ async fn main() -> std::io::Result<()> {
         Some(Commands::Serve { host, port }) => {
             let mut create_new_db = false;
             let file_exists = Path::new("database.sqlite").exists();
-            let log_file = OpenOptions::new()
-                .create(true)
-                .append(true)
-                .open("app.log")?;
 
-            Builder::from_env(env_logger::Env::new().default_filter_or("info"))
-                .target(env_logger::Target::Pipe(Box::new(log_file)))
-                .init();
+            // let log_file = OpenOptions::new()
+            //     .create(true)
+            //     .append(true)
+            //     .open("app.log")?;
+
+            // Builder::from_env(env_logger::Env::new().default_filter_or("info"))
+            //     .target(env_logger::Target::Pipe(Box::new(log_file)))
+            //     .init();
+
+            Builder::from_env(env_logger::Env::new().default_filter_or("error")).init();
 
             if !file_exists {
                 create_new_db = true;
