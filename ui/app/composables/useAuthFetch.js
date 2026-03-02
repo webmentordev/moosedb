@@ -2,7 +2,6 @@ export const useAuthFetch = () => {
     const { getToken } = useAuthToken();
     const authFetch = async (url, options = {}) => {
         const token = getToken();
-        console.log(token);
         const defaultOptions = {
             headers: {
                 'Authorization': token ? `Bearer ${token}` : '',

@@ -22,7 +22,7 @@
             <AppCreateRecord v-model:record_show="record_show" :columns="columns" :collection_id="active_tb"
                 @fetch-data="get_collection(active_tb)" />
 
-            <AppTable :records="records" :columns="columns" />
+            <AppTable :records="records" :columns="columns" :collection-id="active_tb" />
 
             <div class="bg-dark/5 backdrop-blur-sm fixed top-0 left-0 z-40 w-full h-full" v-if="show">
                 <div class="w-full h-full flex justify-end" @click.self="show = false">

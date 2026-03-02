@@ -24,6 +24,9 @@ x Hide created_at & updated_at from Create Record
 - use Component for Success messages
 x now record message if collection is empty!
 x render text field as HTML
+x delete record checkbox
+- add delete record confirm before delete
+- refetch remaining records after delete
 
 
 
@@ -79,6 +82,7 @@ x create new super admin API
     x fetch all table records
     - send latest records first
     - show data in pagination
+    x delete single/multi records
 - Public collection API
     x send collection data
     - send only records with the API, no message

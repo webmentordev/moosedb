@@ -253,7 +253,8 @@ async fn main() -> std::io::Result<()> {
                             .service(create_super_admin)
                             .service(get_super_admins)
                             .service(create_record)
-                            .service(update_your_password),
+                            .service(update_your_password)
+                            .service(delete_collection_records),
                     )
                     .service(
                         web::scope("/api")
@@ -1026,6 +1027,121 @@ async fn get_single_record(
             }),
         ),
     }
+}
+
+#[derive(Deserialize)]
+struct DeleteCollectionRecords {
+    collection_id: String,
+    record_ids: Vec<String>,
+}
+
+#[derive(Serialize)]
+struct DeleteResponse {
+    success: bool,
+    message: String,
+    deleted_count: Option<usize>,
+}
+
+#[post("/delete-collection-records")]
+async fn delete_collection_records(
+    data: web::Data<AppData>,
+    request: web::Json<DeleteCollectionRecords>,
+) -> Result<impl Responder> {
+    let collection_id = request.collection_id.clone();
+    let record_ids = request.record_ids.clone();
+
+    if record_ids.is_empty() {
+        return Ok(HttpResponse::BadRequest().json(DeleteResponse {
+            success: false,
+            message: "No record IDs provided".to_string(),
+            deleted_count: None,
+        }));
+    }
+
+    let conn = match data.database.get() {
+        Ok(conn) => conn,
+        Err(err) => {
+            return Ok(HttpResponse::InternalServerError().json(DeleteResponse {
+                success: false,
+                message: format!("Failed to get database connection: {}", err),
+                deleted_count: None,
+            }));
+        }
+    };
+
+    let metadata_exists: Result<i64, _> = conn.query_row(
+        "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='_database_metadata'",
+        [],
+        |row| row.get(0),
+    );
+
+    if let Ok(0) = metadata_exists {
+        return Ok(HttpResponse::NotFound().json(DeleteResponse {
+            success: false,
+            message: "Metadata table does not exist".to_string(),
+            deleted_count: None,
+        }));
+    }
+
+    let table_name: Result<String, _> = conn.query_row(
+        "SELECT table_name FROM _database_metadata WHERE table_id = ?1 LIMIT 1",
+        [&collection_id],
+        |row| row.get(0),
+    );
+
+    let table_name = match table_name {
+        Ok(name) => name,
+        Err(rusqlite::Error::QueryReturnedNoRows) => {
+            return Ok(HttpResponse::NotFound().json(DeleteResponse {
+                success: false,
+                message: format!("Collection with id '{}' not found", collection_id),
+                deleted_count: None,
+            }));
+        }
+        Err(err) => {
+            return Ok(HttpResponse::InternalServerError().json(DeleteResponse {
+                success: false,
+                message: format!("Failed to query collection: {}", err),
+                deleted_count: None,
+            }));
+        }
+    };
+
+    let placeholders = record_ids
+        .iter()
+        .enumerate()
+        .map(|(i, _)| format!("?{}", i + 1))
+        .collect::<Vec<_>>()
+        .join(", ");
+
+    let query = format!(
+        "DELETE FROM \"{}\" WHERE id IN ({})",
+        table_name, placeholders
+    );
+
+    let params: Vec<Box<dyn rusqlite::ToSql>> = record_ids
+        .iter()
+        .map(|id| Box::new(id.clone()) as Box<dyn rusqlite::ToSql>)
+        .collect();
+
+    let params_refs: Vec<&dyn rusqlite::ToSql> = params.iter().map(|p| p.as_ref()).collect();
+
+    let deleted_count = match conn.execute(&query, params_refs.as_slice()) {
+        Ok(count) => count,
+        Err(err) => {
+            return Ok(HttpResponse::InternalServerError().json(DeleteResponse {
+                success: false,
+                message: format!("Failed to delete records: {}", err),
+                deleted_count: None,
+            }));
+        }
+    };
+
+    Ok(HttpResponse::Ok().json(DeleteResponse {
+        success: true,
+        message: format!("Deleted {} record(s) from '{}'", deleted_count, table_name),
+        deleted_count: Some(deleted_count),
+    }))
 }
 
 #[post("/get-collection-records")]
