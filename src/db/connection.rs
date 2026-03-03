@@ -4,6 +4,8 @@ use rusqlite::Error as RusqliteError;
 use rusqlite::{Connection, Result, params};
 use std::collections::HashMap;
 
+#[allow(dead_code)]
+
 pub fn initialize_db(conn: &Connection, create_new_db: bool) -> Result<()> {
     if create_new_db == true {
         conn.execute(

@@ -1,3 +1,9 @@
+mod db;
+mod utils;
+
+use db::connection::*;
+use utils::random::*;
+
 use actix_web::dev::ServiceRequest;
 use actix_web::{
     App, Error, HttpMessage, HttpRequest, HttpResponse, HttpServer, Responder, Result, get,
@@ -10,7 +16,6 @@ use clap::{Parser, Subcommand};
 use env_logger::Builder;
 use jsonwebtoken::{DecodingKey, EncodingKey, Header, Validation, decode, encode};
 use mime_guess::from_path;
-use moosedb::random_numbers;
 use r2d2::Pool;
 use r2d2_sqlite::SqliteConnectionManager;
 use rusqlite::params;
@@ -185,14 +190,14 @@ async fn main() -> std::io::Result<()> {
             Ok(())
         }
         Some(Commands::Upsecret) => {
-            match moosedb::update_secret_key() {
+            match update_secret_key() {
                 Ok(_) => println!("Secret token has been updated!"),
                 Err(error) => println!("Secret update failed! Reason: {}", error),
             }
             Ok(())
         }
         Some(Commands::Upsuper { email, password }) => {
-            match moosedb::update_super_user(email, password) {
+            match update_super_user(email, password) {
                 Ok(_) => println!("Super admin's password has been updated!"),
                 Err(_) => println!("Password update failed!"),
             }
@@ -219,12 +224,12 @@ async fn main() -> std::io::Result<()> {
             let manager = SqliteConnectionManager::file("database.sqlite");
             let pool = Pool::new(manager).expect("Failed to create pool");
             let conn = pool.get().expect("Failed to get connection");
-            if let Err(e) = moosedb::initialize_db(&conn, create_new_db) {
+            if let Err(e) = initialize_db(&conn, create_new_db) {
                 println!("Database could not be created: {}", e);
                 return Ok(());
             }
 
-            let configs = Arc::new(RwLock::new(moosedb::load_configs(&conn).unwrap()));
+            let configs = Arc::new(RwLock::new(load_configs(&conn).unwrap()));
             let jwt_secret = configs.read().unwrap().get("secret").unwrap().clone();
 
             println!("🚀 Listening at http://{}:{}", host, port);
@@ -245,12 +250,12 @@ async fn main() -> std::io::Result<()> {
                             .wrap(auth.clone())
                             .service(get_version)
                             .service(get_setting)
-                            .service(update_setting)
+                            .service(update_setting_func)
                             .service(create_collection)
                             .service(get_collections)
                             .service(delete_collection)
                             .service(get_collection_records)
-                            .service(create_super_admin)
+                            .service(create_super_admin_func)
                             .service(get_super_admins)
                             .service(create_record)
                             .service(update_your_password)
@@ -332,13 +337,13 @@ async fn get_setting(
 }
 
 #[post("/update-setting")]
-async fn update_setting(
+async fn update_setting_func(
     data: web::Data<AppData>,
     request: web::Json<UpdateSetting>,
 ) -> Result<impl Responder> {
     let key = request.key.to_string();
     if key != "secret".to_string() {
-        match moosedb::update_setting(key.clone(), request.value.to_string()) {
+        match update_setting(key.clone(), request.value.to_string()) {
             Ok(_) => {
                 let mut configs = data.configs.write().unwrap();
                 configs.insert(key.clone(), request.value.to_string());
@@ -435,7 +440,7 @@ async fn create_record(
         }
     };
 
-    let generated_id = format!("moo{}", moosedb::simple_uid(12));
+    let generated_id = format!("moo{}", simple_uid(12));
 
     let mut field_names: Vec<String> = vec!["\"id\"".to_string()];
     field_names.extend(fields.iter().map(|(name, _)| format!("\"{}\"", name)));
@@ -1485,8 +1490,8 @@ struct CreateAdmin {
 }
 
 #[post("/create-super-admin")]
-async fn create_super_admin(request: web::Json<CreateAdmin>) -> Result<impl Responder> {
-    match moosedb::create_super_admin(
+async fn create_super_admin_func(request: web::Json<CreateAdmin>) -> Result<impl Responder> {
+    match create_super_admin(
         request.name.to_string(),
         request.email.to_string(),
         request.password.to_string(),

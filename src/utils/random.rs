@@ -1,5 +1,7 @@
 use rand::Rng;
 
+#[allow(dead_code)]
+
 pub fn generate_uid(len: usize) -> String {
     const CHARSET: &[u8] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZ\
                             abcdefghijklmnopqrstuvwxyz\
@@ -15,7 +17,6 @@ pub fn generate_uid(len: usize) -> String {
 
     generated_id
 }
-
 
 pub fn generate_secret() -> String {
     const CHARSET: &[u8] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZ\
@@ -47,7 +48,6 @@ pub fn simple_uid(len: usize) -> String {
         .collect();
     simple_id
 }
-
 
 pub fn random_numbers(len: usize) -> String {
     const CHARSET: &[u8] = b"0123456789";
