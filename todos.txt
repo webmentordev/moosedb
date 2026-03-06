@@ -26,7 +26,8 @@ x now record message if collection is empty!
 x render text field as HTML
 x delete record checkbox
 - add delete record confirm before delete
-- refetch remaining records after delete
+x refetch remaining records after delete
+- Preview api in Dashboard
 
 
 

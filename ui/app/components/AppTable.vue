@@ -84,7 +84,7 @@ const props = defineProps({
     }
 });
 
-const emit = defineEmits(['records-deleted']);
+const emit = defineEmits(['fetch-data']);
 
 const expandedCells = ref({});
 const selectedRows = ref(new Set());
@@ -126,7 +126,7 @@ const deleteSelected = async () => {
 
         if (data.success) {
             selectedRows.value = new Set();
-            emit('records-deleted', ids);
+            emit('fetch-data');
         } else {
             console.error('Delete failed:', data.message);
         }
