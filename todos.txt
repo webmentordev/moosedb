@@ -28,7 +28,7 @@ x delete record checkbox
 - add delete record confirm before delete
 x refetch remaining records after delete
 - Preview api in Dashboard
-
+- File upload progress
 
 
 --------------------
@@ -84,6 +84,11 @@ x create new super admin API
     - send latest records first
     - show data in pagination
     x delete single/multi records
+    x upload files
+    - upload multiple files
+    - delete uploaded files when record is deleted
+    - delete uploaded files when collection is deleted
+    - set file upload size limit
 - Public collection API
     x send collection data
     - send only records with the API, no message
@@ -93,6 +98,7 @@ x create new super admin API
     x use random string for record ids
     - search records API
     - follow default pagination size from settings
+    - send complete file url with API
 
 ------------------------------------------------------------
 Critical Errors

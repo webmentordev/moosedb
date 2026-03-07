@@ -31,6 +31,16 @@
                             v-model="form_data[column.name]" type="datetime-local"
                             :placeholder="`Enter ${column.name}`" />
 
+                        <div v-else-if="column.field_type === 'FILE'" class="flex flex-col gap-1">
+                            <input type="file"
+                                :accept="column.allowed_extensions ? column.allowed_extensions.split(',').map(e => `.${e.trim()}`).join(',') : undefined"
+                                @change="onFileChange(column.name, $event)"
+                                class="block w-full text-white text-sm border border-white/10 rounded-lg px-3 py-2 bg-dark/10 cursor-pointer" />
+                            <span v-if="file_meta[column.name]" class="text-xs text-gray-400">
+                                {{ file_meta[column.name].name }} ({{ formatFileSize(file_meta[column.name].size) }})
+                            </span>
+                        </div>
+
                         <AppInput v-else v-model="form_data[column.name]" type="text"
                             :placeholder="`Enter ${column.name}`" />
                     </div>
@@ -72,6 +82,7 @@ function closeModal() {
 }
 
 const form_data = ref({});
+const file_meta = ref({});
 const loading = ref(false);
 const message = ref({
     text: "",
@@ -93,8 +104,33 @@ watch(() => props.columns, (newColumns) => {
             }
         });
         form_data.value = initialData;
+        file_meta.value = {};
     }
 }, { immediate: true });
+
+function onFileChange(fieldName, event) {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    file_meta.value[fieldName] = { name: file.name, size: file.size };
+
+    const reader = new FileReader();
+    reader.onload = (e) => {
+        const base64 = e.target.result.split(',')[1];
+        form_data.value[fieldName] = {
+            filename: file.name,
+            mime_type: file.type || 'application/octet-stream',
+            data: base64
+        };
+    };
+    reader.readAsDataURL(file);
+}
+
+function formatFileSize(bytes) {
+    if (bytes < 1024) return `${bytes} B`;
+    if (bytes < 1048576) return `${(bytes / 1024).toFixed(1)} KB`;
+    return `${(bytes / 1048576).toFixed(1)} MB`;
+}
 
 async function createRecord() {
     loading.value = true;

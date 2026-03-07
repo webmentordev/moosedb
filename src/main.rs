@@ -161,6 +161,19 @@ struct AppData {
     configs: Arc<RwLock<HashMap<String, String>>>,
 }
 
+async fn serve_upload(req: HttpRequest) -> HttpResponse {
+    let filename = req.match_info().get("filename").unwrap_or("");
+    let file_path = Path::new("uploads").join(filename);
+
+    match std::fs::read(&file_path) {
+        Ok(bytes) => {
+            let mime = from_path(&file_path).first_or_octet_stream();
+            HttpResponse::Ok().content_type(mime.as_ref()).body(bytes)
+        }
+        Err(_) => HttpResponse::NotFound().body("File not found"),
+    }
+}
+
 async fn static_files(req: HttpRequest) -> HttpResponse {
     let path = req.path().trim_start_matches('/');
     let file_path = if path.is_empty() { "index.html" } else { path };
@@ -207,15 +220,6 @@ async fn main() -> std::io::Result<()> {
             let mut create_new_db = false;
             let file_exists = Path::new("database.sqlite").exists();
 
-            // let log_file = OpenOptions::new()
-            //     .create(true)
-            //     .append(true)
-            //     .open("app.log")?;
-
-            // Builder::from_env(env_logger::Env::new().default_filter_or("info"))
-            //     .target(env_logger::Target::Pipe(Box::new(log_file)))
-            //     .init();
-
             Builder::from_env(env_logger::Env::new().default_filter_or("error")).init();
 
             if !file_exists {
@@ -245,6 +249,7 @@ async fn main() -> std::io::Result<()> {
                     .wrap(middleware::Logger::default())
                     .service(index)
                     .route("/auth/login", web::post().to(login))
+                    .route("/uploads/{filename}", web::get().to(serve_upload))
                     .service(
                         web::scope("/admin/api")
                             .wrap(auth.clone())
@@ -367,9 +372,100 @@ async fn update_setting_func(
 }
 
 #[derive(Deserialize, Serialize, Debug)]
+struct FileUpload {
+    filename: String,
+    mime_type: String,
+    data: String,
+}
+
+#[derive(Deserialize, Serialize, Debug)]
 struct CreateRecordRequest {
     collection_id: String,
     data: serde_json::Map<String, serde_json::Value>,
+}
+
+fn slugify(name: &str) -> String {
+    name.chars()
+        .map(|c| {
+            if c.is_alphanumeric() {
+                c.to_ascii_lowercase()
+            } else {
+                '-'
+            }
+        })
+        .collect::<String>()
+        .split('-')
+        .filter(|s| !s.is_empty())
+        .collect::<Vec<_>>()
+        .join("-")
+}
+
+fn save_uploaded_file(upload: &FileUpload) -> Result<String, String> {
+    let uploads_dir = Path::new("uploads");
+    if !uploads_dir.exists() {
+        std::fs::create_dir_all(uploads_dir).map_err(|e| e.to_string())?;
+    }
+
+    let stem = Path::new(&upload.filename)
+        .file_stem()
+        .and_then(|s| s.to_str())
+        .unwrap_or("file");
+
+    let ext = Path::new(&upload.filename)
+        .extension()
+        .and_then(|e| e.to_str())
+        .unwrap_or("");
+
+    let slug = slugify(stem);
+    let slug = if slug.is_empty() {
+        "file".to_string()
+    } else {
+        slug
+    };
+
+    let unique_name = if ext.is_empty() {
+        format!("{}-{}", slug, random_numbers(9))
+    } else {
+        format!("{}-{}.{}", slug, random_numbers(9), ext)
+    };
+
+    let file_path = uploads_dir.join(&unique_name);
+
+    let bytes = base64_decode(&upload.data).map_err(|e| format!("Invalid base64: {}", e))?;
+
+    std::fs::write(&file_path, bytes).map_err(|e| e.to_string())?;
+
+    Ok(file_path.to_string_lossy().to_string())
+}
+
+fn base64_decode(input: &str) -> Result<Vec<u8>, String> {
+    let alphabet = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+    let mut lookup = [0u8; 256];
+    for (i, &c) in alphabet.iter().enumerate() {
+        lookup[c as usize] = i as u8;
+    }
+
+    let input: Vec<u8> = input.bytes().filter(|&c| c != b'=').collect();
+    let mut output = Vec::with_capacity(input.len() * 3 / 4);
+
+    for chunk in input.chunks(4) {
+        let b = chunk
+            .iter()
+            .map(|&c| lookup[c as usize])
+            .collect::<Vec<_>>();
+
+        if b.len() >= 2 {
+            output.push((b[0] << 2) | (b[1] >> 4));
+        }
+        if b.len() >= 3 {
+            output.push((b[1] << 4) | (b[2] >> 2));
+        }
+        if b.len() >= 4 {
+            output.push((b[2] << 6) | b[3]);
+        }
+    }
+
+    Ok(output)
 }
 
 #[post("/create-record")]
@@ -378,7 +474,7 @@ async fn create_record(
     app_data: web::Data<AppData>,
 ) -> Result<impl Responder> {
     let collection_id = request.collection_id.clone();
-    let data = request.data.clone();
+    let mut data = request.data.clone();
 
     let conn = match app_data.database.get() {
         Ok(conn) => conn,
@@ -439,6 +535,36 @@ async fn create_record(
             }));
         }
     };
+
+    for (field_name, field_type) in &fields {
+        if field_type == "FILE" {
+            if let Some(value) = data.get(field_name) {
+                if value.is_object() {
+                    let upload: FileUpload = match serde_json::from_value(value.clone()) {
+                        Ok(u) => u,
+                        Err(err) => {
+                            return Ok(HttpResponse::BadRequest().json(Response {
+                                success: false,
+                                message: format!("Invalid file data for '{}': {}", field_name, err),
+                            }));
+                        }
+                    };
+
+                    match save_uploaded_file(&upload) {
+                        Ok(path) => {
+                            data.insert(field_name.clone(), serde_json::Value::String(path));
+                        }
+                        Err(err) => {
+                            return Ok(HttpResponse::InternalServerError().json(Response {
+                                success: false,
+                                message: format!("Failed to save file '{}': {}", field_name, err),
+                            }));
+                        }
+                    }
+                }
+            }
+        }
+    }
 
     let generated_id = format!("moo{}", simple_uid(12));
 
@@ -1525,6 +1651,7 @@ struct CollectionFields {
     min: Option<u32>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     max: Option<u32>,
+    allowed_extensions: Option<String>,
 }
 
 #[post("/create-collection")]
@@ -1580,6 +1707,7 @@ async fn create_collection(
             nullable BOOLEAN NOT NULL,
             min INTEGER,
             max INTEGER,
+            allowed_extensions TEXT,
             created_at TEXT DEFAULT CURRENT_TIMESTAMP,
             updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
             PRIMARY KEY (table_name, field_name)
@@ -1645,8 +1773,8 @@ async fn create_collection(
     }
 
     for field in &data.fields {
-        let insert_metadata_sql = "INSERT INTO _database_metadata (table_id, table_name, field_name, field_type, unique_field, nullable, min, max) 
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?)";
+        let insert_metadata_sql = "INSERT INTO _database_metadata (table_id, table_name, field_name, field_type, unique_field, nullable, min, max, allowed_extensions) 
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)";
 
         if let Err(err) = conn.execute(
             insert_metadata_sql,
@@ -1658,7 +1786,8 @@ async fn create_collection(
                 field.unique,
                 field.nullable,
                 field.min,
-                field.max
+                field.max,
+                field.allowed_extensions
             ],
         ) {
             return Ok(HttpResponse::InternalServerError().json(Response {
@@ -1683,6 +1812,7 @@ fn sql_type_from_field_type(field_type: &str) -> &str {
         "BOOLEAN" => "INTEGER",
         "DATETIME" => "TEXT",
         "TIMESTAMP" => "TEXT",
+        "FILE" => "TEXT",
         _ => "TEXT",
     }
 }
