@@ -246,6 +246,7 @@ async fn main() -> std::io::Result<()> {
                         jwt_secret: jwt_secret.clone(),
                         configs: configs.clone(),
                     }))
+                    .app_data(web::JsonConfig::default().limit(50 * 1024 * 1024))
                     .wrap(middleware::Logger::default())
                     .service(index)
                     .route("/auth/login", web::post().to(login))
@@ -1238,6 +1239,72 @@ async fn delete_collection_records(
         }
     };
 
+    let mut file_field_stmt = match conn.prepare(
+        "SELECT field_name FROM _database_metadata WHERE table_name = ?1 AND field_type = 'FILE'",
+    ) {
+        Ok(stmt) => stmt,
+        Err(err) => {
+            return Ok(HttpResponse::InternalServerError().json(DeleteResponse {
+                success: false,
+                message: format!("Failed to query file fields: {}", err),
+                deleted_count: None,
+            }));
+        }
+    };
+
+    let file_fields: Vec<String> = file_field_stmt
+        .query_map([&table_name], |row| row.get(0))
+        .and_then(|rows| rows.collect())
+        .unwrap_or_default();
+
+    if !file_fields.is_empty() {
+        let id_placeholders = record_ids
+            .iter()
+            .enumerate()
+            .map(|(i, _)| format!("?{}", i + 1))
+            .collect::<Vec<_>>()
+            .join(", ");
+
+        let cols = file_fields
+            .iter()
+            .map(|f| format!("\"{}\"", f))
+            .collect::<Vec<_>>()
+            .join(", ");
+
+        let select_query = format!(
+            "SELECT {} FROM \"{}\" WHERE id IN ({})",
+            cols, table_name, id_placeholders
+        );
+
+        let params: Vec<Box<dyn rusqlite::ToSql>> = record_ids
+            .iter()
+            .map(|id| Box::new(id.clone()) as Box<dyn rusqlite::ToSql>)
+            .collect();
+        let params_refs: Vec<&dyn rusqlite::ToSql> = params.iter().map(|p| p.as_ref()).collect();
+
+        if let Ok(mut stmt) = conn.prepare(&select_query) {
+            let col_count = file_fields.len();
+            let _ = stmt
+                .query_map(params_refs.as_slice(), |row| {
+                    let mut paths = Vec::new();
+                    for i in 0..col_count {
+                        if let Ok(Some(path)) = row.get::<_, Option<String>>(i) {
+                            paths.push(path);
+                        }
+                    }
+                    Ok(paths)
+                })
+                .and_then(|rows| rows.collect::<Result<Vec<_>, _>>())
+                .map(|all_paths| {
+                    for paths in all_paths {
+                        for path in paths {
+                            let _ = std::fs::remove_file(&path);
+                        }
+                    }
+                });
+        }
+    }
+
     let placeholders = record_ids
         .iter()
         .enumerate()
@@ -1448,6 +1515,7 @@ async fn delete_collection(
             }));
         }
     };
+
     let metadata_exists: Result<i64, _> = conn.query_row(
         "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='_database_metadata'",
         [],
@@ -1460,11 +1528,13 @@ async fn delete_collection(
             message: "Metadata table does not exist".to_string(),
         }));
     }
+
     let table_name: Result<String, _> = conn.query_row(
         "SELECT table_name FROM _database_metadata WHERE table_id = ?1 LIMIT 1",
         [&collection_id],
         |row| row.get(0),
     );
+
     let table_name = match table_name {
         Ok(name) => name,
         Err(rusqlite::Error::QueryReturnedNoRows) => {
@@ -1480,12 +1550,56 @@ async fn delete_collection(
             }));
         }
     };
+
+    let file_fields: Vec<String> = conn
+        .prepare(
+            "SELECT field_name FROM _database_metadata WHERE table_name = ?1 AND field_type = 'FILE'"
+        )
+        .and_then(|mut stmt| {
+            stmt.query_map([&table_name], |row| row.get(0))
+                .and_then(|rows| rows.collect())
+        })
+        .unwrap_or_default();
+
+    if !file_fields.is_empty() {
+        let cols = file_fields
+            .iter()
+            .map(|f| format!("\"{}\"", f))
+            .collect::<Vec<_>>()
+            .join(", ");
+
+        let select_query = format!("SELECT {} FROM \"{}\"", cols, table_name);
+
+        if let Ok(mut stmt) = conn.prepare(&select_query) {
+            let col_count = file_fields.len();
+            let _ = stmt
+                .query_map([], |row| {
+                    let mut paths = Vec::new();
+                    for i in 0..col_count {
+                        if let Ok(Some(path)) = row.get::<_, Option<String>>(i) {
+                            paths.push(path);
+                        }
+                    }
+                    Ok(paths)
+                })
+                .and_then(|rows| rows.collect::<Result<Vec<_>, _>>())
+                .map(|all_paths| {
+                    for paths in all_paths {
+                        for path in paths {
+                            let _ = std::fs::remove_file(&path);
+                        }
+                    }
+                });
+        }
+    }
+
     if let Err(err) = conn.execute(&format!("DROP TABLE IF EXISTS \"{}\"", table_name), []) {
         return Ok(HttpResponse::InternalServerError().json(Response {
             success: false,
             message: format!("Failed to drop table: {}", err),
         }));
     }
+
     if let Err(err) = conn.execute(
         "DELETE FROM _database_metadata WHERE table_id = ?1",
         [&collection_id],
@@ -1495,6 +1609,7 @@ async fn delete_collection(
             message: format!("Failed to delete from metadata: {}", err),
         }));
     }
+
     Ok(HttpResponse::Ok().json(Response {
         success: true,
         message: format!("Collection '{}' deleted successfully", table_name),
