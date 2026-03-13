@@ -13,10 +13,14 @@
                             src="https://api.iconify.design/ic:baseline-delete-forever.svg?color=%23e01b24"
                             width="20"></button>
                 </div>
-                <button @click="record_show = true"
-                    class="py-2 px-3 bg-main hover:bg-main/10 disabled:bg-gray-400 text-white rounded-xl font-semibold text-sm">+
-                    New
-                    record</button>
+                <div class="flex items-center">
+                    <button class="py-2 px-3 ml-3 bg-blue-600 text-white rounded-xl font-semibold text-sm">Preview
+                        API</button>
+                    <button @click="record_show = true"
+                        class="py-2 px-3 ml-3 bg-main hover:bg-main/10 disabled:bg-gray-400 rounded-xl font-semibold text-sm">+
+                        New
+                        record</button>
+                </div>
             </div>
 
             <AppCreateRecord v-model:record_show="record_show" :columns="columns" :collection_id="active_tb"

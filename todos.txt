@@ -29,6 +29,7 @@ x delete record checkbox
 x refetch remaining records after delete
 - Preview api in Dashboard
 - File upload progress
+x File icon instead of text
 
 
 --------------------
@@ -86,9 +87,11 @@ x create new super admin API
     x delete single/multi records
     x upload files
     - upload multiple files
-    - delete uploaded files when record is deleted
-    - delete uploaded files when collection is deleted
+    x delete uploaded files when record is deleted
+    x delete uploaded files when collection is deleted
     - set file upload size limit
+    x increase upload file size
+    - preview files
 - Public collection API
     x send collection data
     - send only records with the API, no message

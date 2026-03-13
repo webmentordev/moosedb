@@ -39,6 +39,15 @@
                         <template v-if="isDateTimeColumn(column.name)">
                             {{ formatDateTime(record[column.name]) }}
                         </template>
+                        <template v-else-if="column.field_type === 'FILE'">
+                            <a v-if="record[column.name]" :href="getFileUrl(record[column.name])" target="_blank"
+                                rel="noopener noreferrer"
+                                class="inline-flex items-center text-para-light hover:text-para transition-colors">
+                                <img src="https://api.iconify.design/mdi:file-multiple-outline.svg?color=%23dbdbdb"
+                                    class="w-5 h-5 opacity-70 hover:opacity-100 transition-opacity" alt="File" />
+                            </a>
+                            <span v-else class="text-para-light/30">—</span>
+                        </template>
                         <template v-else-if="column.field_type === 'TEXT'">
                             <span
                                 v-if="!isExpanded(index, column.name) && shouldTruncate(column.name, record[column.name])"
@@ -69,6 +78,9 @@
 
 <script setup>
 const { authFetch } = useAuthFetch();
+const getFileUrl = (url) => {
+    return window.location.origin + '/' + url;
+};
 const props = defineProps({
     records: {
         type: Array,
@@ -104,7 +116,6 @@ const toggleSelectAll = () => {
         selectedRows.value = new Set(props.records.map((_, i) => i));
     }
 };
-
 
 const toggleRow = (index) => {
     const updated = new Set(selectedRows.value);
