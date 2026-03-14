@@ -98,7 +98,7 @@ pub fn update_super_user(email: String, new_password: String) -> Result<()> {
 
     let hashed_password = hash(new_password, DEFAULT_COST).unwrap();
     let updated = conn.execute(
-        "UPDATE _super_admins SET password = ?1 WHERE email = ?2",
+        "UPDATE _super_admins SET password = ?1, updated_at = CURRENT_TIMESTAMP WHERE email = ?2",
         params![hashed_password, email],
     )?;
 
@@ -161,18 +161,18 @@ pub fn update_setting(key: String, new_value: String) -> Result<()> {
     Ok(())
 }
 
-// Update Secret ket
+// Update Secret key
 pub fn update_secret_key() -> Result<()> {
     let conn = Connection::open("database.sqlite")?;
 
     let updated = conn.execute(
-        "UPDATE _configs SET value = ?1 WHERE key = 'secret'",
+        "UPDATE _configs SET value = ?1, updated_at = CURRENT_TIMESTAMP WHERE key = 'secret'",
         params![generate_secret()],
     )?;
 
     if updated != 1 {
         eprintln!(
-            "Unexpected: serect key could not be updated. Reason: {}",
+            "Unexpected: secret key could not be updated. Reason: {}",
             updated
         );
     }

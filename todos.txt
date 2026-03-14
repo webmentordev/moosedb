@@ -39,8 +39,8 @@ x File icon instead of text
     x update app name api
     x add default pagination size in settings 
     - update pagination size API
-        - update the updated_at date too
-    - update the updated_at date for all settings
+        x update the updated_at date too
+    x update the updated_at date for all settings
     x secure secret update from dashboard or API
     x don't get secret key from dashboard or API
 - create session validation system like Laravel
