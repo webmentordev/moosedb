@@ -31,14 +31,19 @@
                             v-model="form_data[column.name]" type="datetime-local"
                             :placeholder="`Enter ${column.name}`" />
 
-                        <div v-else-if="column.field_type === 'FILE'" class="flex flex-col gap-1">
-                            <input type="file"
+                        <div v-else-if="column.field_type === 'FILE'" class="flex flex-col gap-2">
+                            <input type="file" multiple
                                 :accept="column.allowed_extensions ? column.allowed_extensions.split(',').map(e => `.${e.trim()}`).join(',') : undefined"
                                 @change="onFileChange(column.name, $event)"
                                 class="block w-full text-white text-sm border border-white/10 rounded-lg px-3 py-2 bg-dark/10 cursor-pointer" />
-                            <span v-if="file_meta[column.name]" class="text-xs text-gray-400">
-                                {{ file_meta[column.name].name }} ({{ formatFileSize(file_meta[column.name].size) }})
-                            </span>
+                            <div v-if="file_meta[column.name]?.length" class="flex flex-col gap-1">
+                                <div v-for="(meta, index) in file_meta[column.name]" :key="index"
+                                    class="flex items-center justify-between text-xs text-gray-400 bg-dark/10 px-2 py-1 rounded">
+                                    <span>{{ meta.name }} ({{ formatFileSize(meta.size) }})</span>
+                                    <button @click="removeFile(column.name, index)"
+                                        class="ml-2 text-red-400 hover:text-red-300">✕</button>
+                                </div>
+                            </div>
                         </div>
 
                         <AppInput v-else v-model="form_data[column.name]" type="text"
@@ -99,6 +104,8 @@ watch(() => props.columns, (newColumns) => {
                 initialData[column.name] = false;
             } else if (column.field_type === 'TEXT') {
                 initialData[column.name] = '';
+            } else if (column.field_type === 'FILE') {
+                initialData[column.name] = [];
             } else {
                 initialData[column.name] = null;
             }
@@ -109,21 +116,34 @@ watch(() => props.columns, (newColumns) => {
 }, { immediate: true });
 
 function onFileChange(fieldName, event) {
-    const file = event.target.files?.[0];
-    if (!file) return;
+    const files = Array.from(event.target.files || []);
+    if (!files.length) return;
 
-    file_meta.value[fieldName] = { name: file.name, size: file.size };
+    if (!file_meta.value[fieldName]) file_meta.value[fieldName] = [];
+    if (!Array.isArray(form_data.value[fieldName])) form_data.value[fieldName] = [];
 
-    const reader = new FileReader();
-    reader.onload = (e) => {
-        const base64 = e.target.result.split(',')[1];
-        form_data.value[fieldName] = {
-            filename: file.name,
-            mime_type: file.type || 'application/octet-stream',
-            data: base64
+    files.forEach(file => {
+        const metaEntry = { name: file.name, size: file.size };
+        file_meta.value[fieldName].push(metaEntry);
+
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            const base64 = e.target.result.split(',')[1];
+            form_data.value[fieldName].push({
+                filename: file.name,
+                mime_type: file.type || 'application/octet-stream',
+                data: base64
+            });
         };
-    };
-    reader.readAsDataURL(file);
+        reader.readAsDataURL(file);
+    });
+
+    event.target.value = '';
+}
+
+function removeFile(fieldName, index) {
+    file_meta.value[fieldName].splice(index, 1);
+    form_data.value[fieldName].splice(index, 1);
 }
 
 function formatFileSize(bytes) {

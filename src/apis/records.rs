@@ -174,7 +174,50 @@ async fn create_record(
     for (field_name, field_type) in &fields {
         if field_type == "FILE" {
             if let Some(value) = data.get(field_name) {
-                if value.is_object() {
+                if let Some(arr) = value.as_array() {
+                    let mut saved_paths: Vec<serde_json::Value> = Vec::new();
+
+                    for item in arr {
+                        if item.is_object() {
+                            let upload: FileUpload = match serde_json::from_value(item.clone()) {
+                                Ok(u) => u,
+                                Err(err) => {
+                                    return Ok(HttpResponse::BadRequest().json(Response {
+                                        success: false,
+                                        message: format!(
+                                            "Invalid file data for '{}': {}",
+                                            field_name, err
+                                        ),
+                                    }));
+                                }
+                            };
+
+                            match save_uploaded_file(&upload) {
+                                Ok(path) => {
+                                    saved_paths.push(serde_json::Value::String(path));
+                                }
+                                Err(err) => {
+                                    return Ok(HttpResponse::InternalServerError().json(
+                                        Response {
+                                            success: false,
+                                            message: format!(
+                                                "Failed to save file '{}': {}",
+                                                field_name, err
+                                            ),
+                                        },
+                                    ));
+                                }
+                            }
+                        }
+                    }
+
+                    data.insert(
+                        field_name.clone(),
+                        serde_json::Value::String(
+                            serde_json::to_string(&saved_paths).unwrap_or_default(),
+                        ),
+                    );
+                } else if value.is_object() {
                     let upload: FileUpload = match serde_json::from_value(value.clone()) {
                         Ok(u) => u,
                         Err(err) => {
@@ -187,7 +230,8 @@ async fn create_record(
 
                     match save_uploaded_file(&upload) {
                         Ok(path) => {
-                            data.insert(field_name.clone(), serde_json::Value::String(path));
+                            let paths = serde_json::to_string(&vec![path]).unwrap_or_default();
+                            data.insert(field_name.clone(), serde_json::Value::String(paths));
                         }
                         Err(err) => {
                             return Ok(HttpResponse::InternalServerError().json(Response {

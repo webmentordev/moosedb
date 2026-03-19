@@ -287,8 +287,16 @@ pub async fn delete_collection_records(
                 .query_map(params_refs.as_slice(), |row| {
                     let mut paths = Vec::new();
                     for i in 0..col_count {
-                        if let Ok(Some(path)) = row.get::<_, Option<String>>(i) {
-                            paths.push(path);
+                        if let Ok(Some(raw)) = row.get::<_, Option<String>>(i) {
+                            if let Ok(serde_json::Value::Array(arr)) = serde_json::from_str(&raw) {
+                                for entry in arr {
+                                    if let Some(p) = entry.as_str() {
+                                        paths.push(p.to_string());
+                                    }
+                                }
+                            } else {
+                                paths.push(raw);
+                            }
                         }
                     }
                     Ok(paths)
@@ -575,8 +583,16 @@ pub async fn delete_collection(
                 .query_map([], |row| {
                     let mut paths = Vec::new();
                     for i in 0..col_count {
-                        if let Ok(Some(path)) = row.get::<_, Option<String>>(i) {
-                            paths.push(path);
+                        if let Ok(Some(raw)) = row.get::<_, Option<String>>(i) {
+                            if let Ok(serde_json::Value::Array(arr)) = serde_json::from_str(&raw) {
+                                for entry in arr {
+                                    if let Some(p) = entry.as_str() {
+                                        paths.push(p.to_string());
+                                    }
+                                }
+                            } else {
+                                paths.push(raw);
+                            }
                         }
                     }
                     Ok(paths)
