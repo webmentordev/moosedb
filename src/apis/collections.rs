@@ -111,7 +111,10 @@ pub async fn get_collection(
         }
     };
 
-    let mut stmt = match conn.prepare(&format!("SELECT * FROM \"{}\"", table_name)) {
+    let mut stmt = match conn.prepare(&format!(
+        "SELECT * FROM \"{}\" ORDER BY updated_at DESC",
+        table_name
+    )) {
         Ok(stmt) => stmt,
         Err(err) => {
             return Ok(HttpResponse::InternalServerError().json(CollectionData {
@@ -454,7 +457,10 @@ pub async fn get_collection_records(
         field_type: "TIMESTAMP".to_string(),
     });
 
-    let mut stmt = match conn.prepare(&format!("SELECT * FROM \"{}\"", table_name)) {
+    let mut stmt = match conn.prepare(&format!(
+        "SELECT * FROM \"{}\" ORDER BY updated_at DESC",
+        table_name
+    )) {
         Ok(stmt) => stmt,
         Err(err) => {
             return Ok(HttpResponse::InternalServerError().json(CollectionRecords {

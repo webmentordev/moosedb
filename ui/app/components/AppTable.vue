@@ -43,7 +43,9 @@
                             <button v-if="record[column.name]" type="button"
                                 @click="openFilePreview(record[column.name])"
                                 class="inline-flex items-center text-para-light hover:text-para transition-colors">
-                                <img src="https://api.iconify.design/mdi:file-multiple-outline.svg?color=%23dbdbdb"
+                                <img :src="getFileCount(record[column.name]) > 1
+                                    ? 'https://api.iconify.design/mdi:file-multiple-outline.svg?color=%23dbdbdb'
+                                    : 'https://api.iconify.design/line-md:file.svg?color=%23dbdbdb'"
                                     class="w-5 h-5 opacity-70 hover:opacity-100 transition-opacity" alt="File" />
                             </button>
                             <span v-else class="text-para-light/30">—</span>
@@ -92,7 +94,7 @@
                         <span class="text-2xl">{{ fileIcon(file.name) }}</span>
                     </div>
                     <span class="text-xs text-gray-300 text-center break-all leading-tight line-clamp-2">{{ file.name
-                        }}</span>
+                    }}</span>
                 </a>
             </div>
         </div>
@@ -167,6 +169,15 @@ const deleteSelected = async () => {
         console.error('Delete request failed:', err);
     }
 };
+
+function getFileCount(raw) {
+    try {
+        const parsed = JSON.parse(raw);
+        return Array.isArray(parsed) ? parsed.length : 1;
+    } catch {
+        return 1;
+    }
+}
 
 function openFilePreview(raw) {
     let paths = [];

@@ -114,7 +114,7 @@ pub async fn get_collection_data(
     let offset = (page - 1) * items_per_page;
 
     let query_sql = format!(
-        "SELECT * FROM \"{}\" LIMIT {} OFFSET {}",
+        "SELECT * FROM \"{}\" ORDER BY updated_at DESC LIMIT {} OFFSET {}",
         table_name, items_per_page, offset
     );
 

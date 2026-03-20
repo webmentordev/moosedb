@@ -15,8 +15,8 @@ x create composables for API calls
 x create composables for token validation
 x create guest auth for login page
 x add rish text editor
-- active table indicator
-- UI to show records in the table
+x active table indicator
+x UI to show records in the table
 - render Nuxt error page
 x improve active tab/collection detection
 x Hide created_at & updated_at from Create Record
@@ -80,13 +80,13 @@ x create new super admin API
     - delete the collection
         - soft delete the collection
         - list soft deleted collection to the admin
-    - delete files when collection is deleted
+    x delete files when collection is deleted
     x fetch all table records
     - send latest records first
     - show data in pagination
     x delete single/multi records
     x upload files
-    - upload multiple files
+    x upload multiple files
     x delete uploaded files when record is deleted
     x delete uploaded files when collection is deleted
     - set file upload size limit
@@ -101,7 +101,7 @@ x create new super admin API
     x use random string for record ids
     - search records API
     - follow default pagination size from settings
-    - send complete file url with API
+    x send complete file url with API
 
 ------------------------------------------------------------
 Critical Errors
