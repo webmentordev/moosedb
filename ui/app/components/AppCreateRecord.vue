@@ -10,17 +10,21 @@
                         <AppLabel :text="column.name" />
 
                         <AppInput v-if="column.field_type === 'VARCHAR'" v-model="form_data[column.name]" type="text"
-                            :placeholder="`Enter ${column.name}`" />
+                            :placeholder="`Enter ${column.name}`"
+                            :class="field_errors[column.name] ? 'border-red-500' : ''" />
 
                         <ClientOnly v-else-if="column.field_type === 'TEXT'">
-                            <Quill v-model:content="form_data[column.name]" />
+                            <Quill v-model:content="form_data[column.name]"
+                                :class="field_errors[column.name] ? 'border-red-500' : ''" />
                         </ClientOnly>
 
                         <AppInput v-else-if="column.field_type === 'INTEGER'" v-model.number="form_data[column.name]"
-                            type="number" :placeholder="`Enter ${column.name}`" />
+                            type="number" :placeholder="`Enter ${column.name}`"
+                            :class="field_errors[column.name] ? 'border-red-500' : ''" />
 
                         <AppInput v-else-if="column.field_type === 'DECIMAL'" v-model.number="form_data[column.name]"
-                            type="number" step="0.01" :placeholder="`Enter ${column.name}`" />
+                            type="number" step="0.01" :placeholder="`Enter ${column.name}`"
+                            :class="field_errors[column.name] ? 'border-red-500' : ''" />
 
                         <label v-else-if="column.field_type === 'BOOLEAN'" class="flex items-center gap-2 mt-2">
                             <input type="checkbox" v-model="form_data[column.name]" class="w-4 h-4" />
@@ -28,14 +32,14 @@
                         </label>
 
                         <AppInput v-else-if="column.field_type === 'DATETIME' || column.field_type === 'TIMESTAMP'"
-                            v-model="form_data[column.name]" type="datetime-local"
-                            :placeholder="`Enter ${column.name}`" />
+                            v-model="form_data[column.name]" type="datetime-local" :placeholder="`Enter ${column.name}`"
+                            :class="field_errors[column.name] ? 'border-red-500' : ''" />
 
                         <div v-else-if="column.field_type === 'FILE'" class="flex flex-col gap-2">
                             <input type="file" multiple
                                 :accept="column.allowed_extensions ? column.allowed_extensions.split(',').map(e => `.${e.trim()}`).join(',') : undefined"
                                 @change="onFileChange(column.name, $event)"
-                                class="block w-full text-white text-sm border border-white/10 rounded-lg px-3 py-2 bg-dark/10 cursor-pointer" />
+                                :class="['block w-full text-white text-sm border rounded-lg px-3 py-2 bg-dark/10 cursor-pointer', field_errors[column.name] ? 'border-red-500' : 'border-white/10']" />
                             <div v-if="file_meta[column.name]?.length" class="flex flex-col gap-1">
                                 <div v-for="(meta, index) in file_meta[column.name]" :key="index"
                                     class="flex items-center justify-between text-xs text-gray-400 bg-dark/10 px-2 py-1 rounded">
@@ -47,7 +51,12 @@
                         </div>
 
                         <AppInput v-else v-model="form_data[column.name]" type="text"
-                            :placeholder="`Enter ${column.name}`" />
+                            :placeholder="`Enter ${column.name}`"
+                            :class="field_errors[column.name] ? 'border-red-500' : ''" />
+
+                        <p v-if="field_errors[column.name]" class="mt-1 text-xs text-red-500">
+                            {{ field_errors[column.name] }}
+                        </p>
                     </div>
 
                     <button @click="createRecord" :disabled="loading"
@@ -88,6 +97,7 @@ function closeModal() {
 
 const form_data = ref({});
 const file_meta = ref({});
+const field_errors = ref({});
 const loading = ref(false);
 const message = ref({
     text: "",
@@ -112,12 +122,21 @@ watch(() => props.columns, (newColumns) => {
         });
         form_data.value = initialData;
         file_meta.value = {};
+        field_errors.value = {};
     }
 }, { immediate: true });
+
+function clearFieldError(fieldName) {
+    if (field_errors.value[fieldName]) {
+        delete field_errors.value[fieldName];
+    }
+}
 
 function onFileChange(fieldName, event) {
     const files = Array.from(event.target.files || []);
     if (!files.length) return;
+
+    clearFieldError(fieldName);
 
     if (!file_meta.value[fieldName]) file_meta.value[fieldName] = [];
     if (!Array.isArray(form_data.value[fieldName])) form_data.value[fieldName] = [];
@@ -155,6 +174,7 @@ function formatFileSize(bytes) {
 async function createRecord() {
     loading.value = true;
     message.value = { text: "", success: false };
+    field_errors.value = {};
 
     try {
         const response = await authFetch('/admin/api/create-record', {
@@ -174,6 +194,12 @@ async function createRecord() {
             setTimeout(() => {
                 closeModal();
             }, 1500);
+        } else if (response.errors && Object.keys(response.errors).length > 0) {
+            field_errors.value = response.errors;
+            message.value = {
+                text: response.message,
+                success: false
+            };
         } else {
             message.value = {
                 text: response.message,
@@ -181,10 +207,24 @@ async function createRecord() {
             };
         }
     } catch (error) {
-        message.value = {
-            text: error.message || 'Failed to create record',
-            success: false
-        };
+        const data = error?.data ?? error?.response?._data ?? null;
+        if (data?.errors && Object.keys(data.errors).length > 0) {
+            field_errors.value = data.errors;
+            message.value = {
+                text: data.message,
+                success: false
+            };
+        } else if (data?.message) {
+            message.value = {
+                text: data.message,
+                success: false
+            };
+        } else {
+            message.value = {
+                text: error.message || 'Failed to create record',
+                success: false
+            };
+        }
     } finally {
         loading.value = false;
     }

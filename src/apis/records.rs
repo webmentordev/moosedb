@@ -19,6 +19,22 @@ struct CreateRecordRequest {
     data: serde_json::Map<String, serde_json::Value>,
 }
 
+#[derive(Serialize)]
+struct ValidationErrorResponse {
+    success: bool,
+    message: String,
+    errors: std::collections::HashMap<String, String>,
+}
+
+struct FieldMeta {
+    name: String,
+    field_type: String,
+    nullable: bool,
+    min: Option<i64>,
+    max: Option<i64>,
+    allowed_extensions: Option<String>,
+}
+
 fn slugify(name: &str) -> String {
     name.chars()
         .map(|c| {
@@ -103,6 +119,227 @@ fn base64_decode(input: &str) -> Result<Vec<u8>, String> {
     Ok(output)
 }
 
+fn json_type_label(v: &serde_json::Value) -> &'static str {
+    match v {
+        serde_json::Value::Null => "null",
+        serde_json::Value::Bool(_) => "boolean",
+        serde_json::Value::Number(n) if n.is_f64() => "decimal",
+        serde_json::Value::Number(_) => "integer",
+        serde_json::Value::String(_) => "string",
+        serde_json::Value::Array(_) => "array",
+        serde_json::Value::Object(_) => "object",
+    }
+}
+
+fn validate_field(meta: &FieldMeta, value: Option<&serde_json::Value>) -> Result<(), String> {
+    let is_null = value.map(|v| v.is_null()).unwrap_or(true);
+
+    if !meta.nullable && is_null {
+        return Err(format!("'{}' is required", meta.name));
+    }
+
+    if is_null {
+        return Ok(());
+    }
+
+    let value = value.unwrap();
+
+    match meta.field_type.as_str() {
+        "VARCHAR" | "TEXT" => {
+            let s = match value.as_str() {
+                Some(s) => s,
+                None => {
+                    return Err(format!(
+                        "'{}' must be a string, got {}",
+                        meta.name,
+                        json_type_label(value)
+                    ));
+                }
+            };
+
+            let len = s.chars().count() as i64;
+
+            match (meta.min, meta.max) {
+                (Some(min), Some(max)) => {
+                    if len < min || len > max {
+                        return Err(format!(
+                            "'{}' must be between {} and {} characters (got {})",
+                            meta.name, min, max, len
+                        ));
+                    }
+                }
+                (Some(min), None) => {
+                    if len < min {
+                        return Err(format!(
+                            "'{}' must be at least {} characters (got {})",
+                            meta.name, min, len
+                        ));
+                    }
+                }
+                (None, Some(max)) => {
+                    if len > max {
+                        return Err(format!(
+                            "'{}' must be at most {} characters (got {})",
+                            meta.name, max, len
+                        ));
+                    }
+                }
+                (None, None) => {}
+            }
+        }
+
+        "INTEGER" => {
+            let n = match value.as_i64() {
+                Some(n) => n,
+                None => {
+                    return Err(format!(
+                        "'{}' must be an integer, got {}",
+                        meta.name,
+                        json_type_label(value)
+                    ));
+                }
+            };
+
+            match (meta.min, meta.max) {
+                (Some(min), Some(max)) => {
+                    if n < min || n > max {
+                        return Err(format!(
+                            "'{}' must be between {} and {} (got {})",
+                            meta.name, min, max, n
+                        ));
+                    }
+                }
+                (Some(min), None) => {
+                    if n < min {
+                        return Err(format!(
+                            "'{}' must be at least {} (got {})",
+                            meta.name, min, n
+                        ));
+                    }
+                }
+                (None, Some(max)) => {
+                    if n > max {
+                        return Err(format!(
+                            "'{}' must be at most {} (got {})",
+                            meta.name, max, n
+                        ));
+                    }
+                }
+                (None, None) => {}
+            }
+        }
+
+        "DECIMAL" => {
+            let n = match value.as_f64() {
+                Some(n) => n,
+                None => {
+                    return Err(format!(
+                        "'{}' must be a number, got {}",
+                        meta.name,
+                        json_type_label(value)
+                    ));
+                }
+            };
+
+            if let Some(min) = meta.min {
+                if n < min as f64 {
+                    return Err(format!(
+                        "'{}' must be at least {} (got {})",
+                        meta.name, min, n
+                    ));
+                }
+            }
+
+            if let Some(max) = meta.max {
+                if n > max as f64 {
+                    return Err(format!(
+                        "'{}' must be at most {} (got {})",
+                        meta.name, max, n
+                    ));
+                }
+            }
+        }
+
+        "BOOLEAN" => {
+            if !value.is_boolean() {
+                return Err(format!(
+                    "'{}' must be true or false, got {}",
+                    meta.name,
+                    json_type_label(value)
+                ));
+            }
+        }
+
+        "DATETIME" | "TIMESTAMP" => {
+            if value.as_str().is_none() {
+                return Err(format!(
+                    "'{}' must be a datetime string, got {}",
+                    meta.name,
+                    json_type_label(value)
+                ));
+            }
+        }
+
+        "FILE" => {
+            let uploads = match value.as_array() {
+                Some(arr) => arr.clone(),
+                None if value.is_object() => vec![value.clone()],
+                _ => {
+                    return Err(format!(
+                        "'{}' must be a file object or an array of file objects, got {}",
+                        meta.name,
+                        json_type_label(value)
+                    ));
+                }
+            };
+
+            if let Some(allowed_raw) = &meta.allowed_extensions {
+                let allowed: Vec<String> = allowed_raw
+                    .split(',')
+                    .map(|s| s.trim().to_lowercase())
+                    .filter(|s| !s.is_empty())
+                    .collect();
+
+                for item in &uploads {
+                    let filename = match item.get("filename").and_then(|f| f.as_str()) {
+                        Some(f) => f,
+                        None => {
+                            return Err(format!(
+                                "'{}' contains a file entry with no filename",
+                                meta.name
+                            ));
+                        }
+                    };
+
+                    let ext = Path::new(filename)
+                        .extension()
+                        .and_then(|e| e.to_str())
+                        .unwrap_or("")
+                        .to_lowercase();
+
+                    if ext.is_empty() {
+                        return Err(format!(
+                            "'{}': '{}' has no file extension. Allowed: {}",
+                            meta.name, filename, allowed_raw
+                        ));
+                    }
+
+                    if !allowed.contains(&ext) {
+                        return Err(format!(
+                            "'{}': '.{}' is not allowed for '{}'. Allowed: {}",
+                            meta.name, ext, filename, allowed_raw
+                        ));
+                    }
+                }
+            }
+        }
+
+        _ => {}
+    }
+
+    Ok(())
+}
+
 #[post("/create-record")]
 async fn create_record(
     request: web::Json<CreateRecordRequest>,
@@ -132,7 +369,7 @@ async fn create_record(
         Err(rusqlite::Error::QueryReturnedNoRows) => {
             return Ok(HttpResponse::NotFound().json(Response {
                 success: false,
-                message: format!("Collection with id '{}' not found", collection_id),
+                message: format!("No collection found with id '{}'", collection_id),
             }));
         }
         Err(err) => {
@@ -144,7 +381,8 @@ async fn create_record(
     };
 
     let mut stmt = match conn.prepare(
-        "SELECT field_name, field_type FROM _database_metadata WHERE table_name = ?1 ORDER BY ROWID"
+        "SELECT field_name, field_type, nullable, min, max, allowed_extensions
+         FROM _database_metadata WHERE table_name = ?1 ORDER BY ROWID",
     ) {
         Ok(stmt) => stmt,
         Err(err) => {
@@ -155,9 +393,16 @@ async fn create_record(
         }
     };
 
-    let fields: Result<Vec<(String, String)>, _> = stmt
+    let fields: Result<Vec<FieldMeta>, _> = stmt
         .query_map([&table_name], |row| {
-            Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
+            Ok(FieldMeta {
+                name: row.get(0)?,
+                field_type: row.get(1)?,
+                nullable: row.get(2)?,
+                min: row.get(3)?,
+                max: row.get(4)?,
+                allowed_extensions: row.get(5)?,
+            })
         })
         .and_then(|mapped_rows| mapped_rows.collect());
 
@@ -171,9 +416,34 @@ async fn create_record(
         }
     };
 
-    for (field_name, field_type) in &fields {
-        if field_type == "FILE" {
-            if let Some(value) = data.get(field_name) {
+    let mut validation_errors: std::collections::HashMap<String, String> =
+        std::collections::HashMap::new();
+
+    for meta in &fields {
+        if let Err(msg) = validate_field(meta, data.get(&meta.name)) {
+            validation_errors.insert(meta.name.clone(), msg);
+        }
+    }
+
+    if !validation_errors.is_empty() {
+        return Ok(HttpResponse::BadRequest().json(ValidationErrorResponse {
+            success: false,
+            message: format!(
+                "{} field{} failed validation",
+                validation_errors.len(),
+                if validation_errors.len() == 1 {
+                    ""
+                } else {
+                    "s"
+                }
+            ),
+            errors: validation_errors,
+        }));
+    }
+
+    for meta in &fields {
+        if meta.field_type == "FILE" {
+            if let Some(value) = data.get(&meta.name) {
                 if let Some(arr) = value.as_array() {
                     let mut saved_paths: Vec<serde_json::Value> = Vec::new();
 
@@ -186,7 +456,7 @@ async fn create_record(
                                         success: false,
                                         message: format!(
                                             "Invalid file data for '{}': {}",
-                                            field_name, err
+                                            meta.name, err
                                         ),
                                     }));
                                 }
@@ -201,8 +471,8 @@ async fn create_record(
                                         Response {
                                             success: false,
                                             message: format!(
-                                                "Failed to save file '{}': {}",
-                                                field_name, err
+                                                "Failed to save file for '{}': {}",
+                                                meta.name, err
                                             ),
                                         },
                                     ));
@@ -212,7 +482,7 @@ async fn create_record(
                     }
 
                     data.insert(
-                        field_name.clone(),
+                        meta.name.clone(),
                         serde_json::Value::String(
                             serde_json::to_string(&saved_paths).unwrap_or_default(),
                         ),
@@ -223,7 +493,7 @@ async fn create_record(
                         Err(err) => {
                             return Ok(HttpResponse::BadRequest().json(Response {
                                 success: false,
-                                message: format!("Invalid file data for '{}': {}", field_name, err),
+                                message: format!("Invalid file data for '{}': {}", meta.name, err),
                             }));
                         }
                     };
@@ -231,12 +501,15 @@ async fn create_record(
                     match save_uploaded_file(&upload) {
                         Ok(path) => {
                             let paths = serde_json::to_string(&vec![path]).unwrap_or_default();
-                            data.insert(field_name.clone(), serde_json::Value::String(paths));
+                            data.insert(meta.name.clone(), serde_json::Value::String(paths));
                         }
                         Err(err) => {
                             return Ok(HttpResponse::InternalServerError().json(Response {
                                 success: false,
-                                message: format!("Failed to save file '{}': {}", field_name, err),
+                                message: format!(
+                                    "Failed to save file for '{}': {}",
+                                    meta.name, err
+                                ),
                             }));
                         }
                     }
@@ -248,7 +521,7 @@ async fn create_record(
     let generated_id = format!("moo{}", simple_uid(12));
 
     let mut field_names: Vec<String> = vec!["\"id\"".to_string()];
-    field_names.extend(fields.iter().map(|(name, _)| format!("\"{}\"", name)));
+    field_names.extend(fields.iter().map(|f| format!("\"{}\"", f.name)));
 
     let placeholders: Vec<String> = (1..=field_names.len()).map(|i| format!("?{}", i)).collect();
 
@@ -261,10 +534,10 @@ async fn create_record(
 
     let mut params: Vec<Box<dyn rusqlite::ToSql>> = vec![Box::new(generated_id)];
 
-    params.extend(fields.iter().map(|(field_name, field_type)| {
-        let value = data.get(field_name);
+    params.extend(fields.iter().map(|meta| {
+        let value = data.get(&meta.name);
 
-        match (value, field_type.as_str()) {
+        match (value, meta.field_type.as_str()) {
             (Some(v), "INTEGER") if v.is_i64() => {
                 Box::new(v.as_i64().unwrap()) as Box<dyn rusqlite::ToSql>
             }
