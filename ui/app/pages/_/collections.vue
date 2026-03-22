@@ -14,14 +14,19 @@
                             width="20"></button>
                 </div>
                 <div class="flex items-center">
-                    <button class="py-2 px-3 ml-3 bg-blue-600 text-white rounded-xl font-semibold text-sm">Preview
-                        API</button>
+                    <button @click="api_preview = true"
+                        class="py-2 px-3 ml-3 bg-blue-600 text-white rounded-xl font-semibold text-sm">
+                        Preview API
+                    </button>
                     <button @click="record_show = true"
                         class="py-2 px-3 ml-3 bg-main hover:bg-main/10 disabled:bg-gray-400 rounded-xl font-semibold text-sm">+
                         New
                         record</button>
                 </div>
             </div>
+
+            <AppApiPreview v-model="api_preview" :collection_id="active_tb" :collection_name="active_tb_name"
+                :columns="columns" />
 
             <AppCreateRecord v-model:record_show="record_show" :columns="columns" :collection_id="active_tb"
                 @fetch-data="get_collection(active_tb)" />
@@ -61,6 +66,7 @@ const body = ref("");
 const records = ref([]);
 const columns = ref([]);
 const record_show = ref(false);
+const api_preview = ref(false);
 
 const { authFetch } = useAuthFetch();
 const show = ref(false);

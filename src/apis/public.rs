@@ -221,7 +221,7 @@ struct SingleRecordResponse {
 #[get("/records/{collection_id}/{record_id}")]
 pub async fn get_single_record(
     data: web::Data<AppData>,
-    path: web::Path<(String, i64)>,
+    path: web::Path<(String, String)>,
 ) -> Result<HttpResponse, Error> {
     let (collection_id, record_id) = path.into_inner();
 
@@ -296,7 +296,7 @@ pub async fn get_single_record(
     let column_count = stmt.column_count();
     let column_names: Vec<String> = stmt.column_names().iter().map(|s| s.to_string()).collect();
 
-    let record_result = stmt.query_row([record_id], |row| {
+    let record_result = stmt.query_row([&record_id], |row| {
         let mut record = serde_json::Map::new();
         for i in 0..column_count {
             let value: serde_json::Value = match row.get_ref(i) {
@@ -322,7 +322,7 @@ pub async fn get_single_record(
         Err(rusqlite::Error::QueryReturnedNoRows) => {
             Ok(HttpResponse::NotFound().json(SingleRecordResponse {
                 success: false,
-                message: format!("Record with id {} not found in '{}'", record_id, table_name),
+                message: format!("Record '{}' not found in '{}'", record_id, table_name),
                 record: None,
             }))
         }
