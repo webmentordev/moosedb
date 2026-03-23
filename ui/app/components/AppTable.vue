@@ -2,7 +2,7 @@
     <section>
         <div v-if="selectedRows.size > 0" class="flex items-center gap-3 px-4 py-2.5 mb-2 bg-dark rounded-xl">
             <span class="text-xs text-para-light">{{ selectedRows.size }} selected</span>
-            <button @click="deleteSelected"
+            <button @click="showConfirm = true"
                 class="ml-auto flex items-center gap-1.5 px-3 py-1.5 text-xs text-red-400 border border-red-400/40 rounded-lg hover:bg-red-400/10 transition-colors">
                 <svg xmlns="http://www.w3.org/2000/svg" class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none"
                     stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -77,6 +77,40 @@
         <p v-if="records.length == 0" class="py-2 px-4 my-3 bg-dark w-fit rounded-2xl m-auto">Collection is empty!</p>
     </section>
 
+    <div v-if="showConfirm" class="fixed inset-0 z-60 flex items-center justify-center bg-black/60 backdrop-blur-sm"
+        @click.self="showConfirm = false">
+        <div class="bg-light border border-white/10 rounded-2xl p-6 w-full max-w-sm shadow-xl">
+            <div class="flex items-center gap-3 mb-2">
+                <div class="flex items-center justify-center w-9 h-9 rounded-full bg-red-400/10">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5 text-red-400" viewBox="0 0 24 24" fill="none"
+                        stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <polyline points="3 6 5 6 21 6" />
+                        <path d="M19 6l-1 14H6L5 6" />
+                        <path d="M10 11v6M14 11v6" />
+                        <path d="M9 6V4h6v2" />
+                    </svg>
+                </div>
+                <h2 class="text-base font-semibold">Delete Records</h2>
+            </div>
+            <p class="text-sm text-para-light mb-6">
+                Are you sure you want to delete
+                <span class="text-red-400 font-medium">{{ selectedRows.size }} {{ selectedRows.size === 1 ? 'record' :
+                    'records' }}</span>?
+                This action cannot be undone.
+            </p>
+            <div class="flex items-center justify-end gap-3">
+                <button @click="showConfirm = false"
+                    class="px-4 py-2 text-xs text-para-light border border-para/40 rounded-lg hover:bg-dark/50 transition-colors">
+                    Cancel
+                </button>
+                <button @click="confirmDelete"
+                    class="px-4 py-2 text-xs text-red-400 border border-red-400/40 rounded-lg hover:bg-red-400/10 transition-colors">
+                    Delete
+                </button>
+            </div>
+        </div>
+    </div>
+
     <div v-if="preview_files.length"
         class="fixed inset-0 z-60 flex items-center justify-center bg-black/60 backdrop-blur-sm"
         @click.self="preview_files = []">
@@ -94,7 +128,7 @@
                         <span class="text-2xl">{{ fileIcon(file.name) }}</span>
                     </div>
                     <span class="text-xs text-gray-300 text-center break-all leading-tight line-clamp-2">{{ file.name
-                    }}</span>
+                        }}</span>
                 </a>
             </div>
         </div>
@@ -124,6 +158,7 @@ const emit = defineEmits(['fetch-data']);
 const expandedCells = ref({});
 const selectedRows = ref(new Set());
 const preview_files = ref([]);
+const showConfirm = ref(false);
 
 const isAllSelected = computed(() =>
     props.records.length > 0 && selectedRows.value.size === props.records.length
@@ -145,6 +180,11 @@ const toggleRow = (index) => {
     const updated = new Set(selectedRows.value);
     updated.has(index) ? updated.delete(index) : updated.add(index);
     selectedRows.value = updated;
+};
+
+const confirmDelete = async () => {
+    showConfirm.value = false;
+    await deleteSelected();
 };
 
 const deleteSelected = async () => {
