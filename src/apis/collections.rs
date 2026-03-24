@@ -802,6 +802,13 @@ pub async fn create_collection(
         }));
     }
 
+    if data.collection.starts_with('_') {
+        return Ok(HttpResponse::BadRequest().json(Response {
+            success: false,
+            message: "Collection name cannot start with '_'".to_string(),
+        }));
+    }
+
     let conn = match app_data.database.get() {
         Ok(conn) => conn,
         Err(err) => {

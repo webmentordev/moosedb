@@ -18,7 +18,7 @@
             </form>
 
             <form @submit.prevent="updated_records_per_page" method="post" class="flex flex-col mt-3">
-                <h3 class="mb-1 ml-1 text-gray-300">Records per page</h3>
+                <h3 class="mb-1 ml-1 text-gray-300">Records per page (1 - 10,000)</h3>
                 <div class="flex items-center w-full">
                     <AppInput type="number" v-model="pagination" placeholder="Record per page (pagination)" />
                     <button v-if="!processing" type="submit"

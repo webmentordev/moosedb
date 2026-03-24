@@ -82,7 +82,7 @@ x create new super admin API
         - list soft deleted collection to the admin
     x delete files when collection is deleted
     x fetch all table records
-    - send latest records first
+    x send latest records first
     - show data in pagination
     x delete single/multi records
     x upload files
@@ -92,6 +92,7 @@ x create new super admin API
     - set file upload size limit
     x increase upload file size
     - preview files
+    x Don't allow collections with name stating with _ (reserved)
 - Public collection API
     x send collection data
     - send only records with the API, no message

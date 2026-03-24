@@ -39,7 +39,14 @@ pub async fn get_collection_data(
 ) -> Result<HttpResponse, Error> {
     let collection_id = path.into_inner();
     let page = query.page.unwrap_or(1).max(1);
-    let items_per_page = query.items.unwrap_or(100).clamp(1, 10000);
+    let default_per_page = data
+        .configs
+        .read()
+        .unwrap()
+        .get("records_per_page")
+        .and_then(|v| v.parse::<u32>().ok())
+        .unwrap_or(100);
+    let items_per_page = query.items.unwrap_or(default_per_page).clamp(1, 10000);
 
     let conn = match data.database.get() {
         Ok(conn) => conn,

@@ -10,36 +10,47 @@
   --color-main: #ef9143;
 }
 
+body {
+  @apply bg-dark;
+}
+
 * {
-    /* font-family: "Space Mono", monospace; */
-    font-family: "Mulish", sans-serif;
-    @apply subpixel-antialiased;
+  /* font-family: "Space Mono", monospace; */
+  font-family: "Mulish", sans-serif;
+  @apply subpixel-antialiased;
 }
 
-h1, h2, h3, button, strong, span{
-    @apply font-bold text-white;
+h1,
+h2,
+h3,
+button,
+strong,
+span {
+  @apply font-bold text-white;
 }
 
-p{
+p {
   @apply text-para-light;
 }
 
 
-.error{
+.error {
   @apply text-red-500;
 }
-button, a{
+
+button,
+a {
   @apply cursor-pointer;
 }
 
-.active-table{
+.active-table {
   @apply border-main
 }
 
-code{
+code {
   @apply inline-block py-px px-2 bg-main/5 text-white font-semibold rounded-lg;
 }
 
-.full-separator{
+.full-separator {
   @apply h-px bg-white/10 w-full my-6;
 }
