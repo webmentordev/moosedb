@@ -1,7 +1,3 @@
-# 🚧 Under Development
-
-> ⚠️ Do not use this system yet. It is still under active development.  
-
 # Build Instructions
 
 This project requires the latest versions of Node.js and Rust.

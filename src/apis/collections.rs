@@ -959,3 +959,324 @@ fn sql_type_from_field_type(field_type: &str) -> &str {
         _ => "TEXT",
     }
 }
+
+
+#[derive(Deserialize, Serialize, Debug)]
+pub struct UpdateCollectionFields {
+    title: String,
+    #[serde(rename = "type")]
+    field_type: String,
+    unique: bool,
+    nullable: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    min: Option<u32>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    max: Option<u32>,
+    allowed_extensions: Option<String>,
+}
+
+#[derive(Deserialize, Serialize, Debug)]
+pub struct UpdateCollectionRequest {
+    collection_id: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    collection_name: Option<String>,
+    #[serde(default)]
+    fields: Vec<UpdateCollectionFields>,
+}
+
+#[post("/update-collection")]
+pub async fn update_collection(
+    data: web::Json<UpdateCollectionRequest>,
+    app_data: web::Data<AppData>,
+) -> Result<HttpResponse, Error> {
+    if data.collection_id.is_empty() {
+        return Ok(HttpResponse::BadRequest().json(Response {
+            success: false,
+            message: "collection_id is required".to_string(),
+        }));
+    }
+
+    if let Some(ref name) = data.collection_name {
+        if name.starts_with('_') {
+            return Ok(HttpResponse::BadRequest().json(Response {
+                success: false,
+                message: "Collection name cannot start with '_'".to_string(),
+            }));
+        }
+    }
+
+    let conn = match app_data.database.get() {
+        Ok(conn) => conn,
+        Err(err) => {
+            return Ok(HttpResponse::InternalServerError().json(Response {
+                success: false,
+                message: format!("Failed to get database connection: {}", err),
+            }));
+        }
+    };
+
+    let metadata_exists: Result<i64, _> = conn.query_row(
+        "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='_database_metadata'",
+        [],
+        |row| row.get(0),
+    );
+
+    if let Ok(0) = metadata_exists {
+        return Ok(HttpResponse::NotFound().json(Response {
+            success: false,
+            message: "Metadata table does not exist".to_string(),
+        }));
+    }
+
+    let current_table_name: Result<String, _> = conn.query_row(
+        "SELECT table_name FROM _database_metadata WHERE table_id = ?1 LIMIT 1",
+        [&data.collection_id],
+        |row| row.get(0),
+    );
+
+    let current_table_name = match current_table_name {
+        Ok(name) => name,
+        Err(rusqlite::Error::QueryReturnedNoRows) => {
+            return Ok(HttpResponse::NotFound().json(Response {
+                success: false,
+                message: format!("Collection with id '{}' not found", data.collection_id),
+            }));
+        }
+        Err(err) => {
+            return Ok(HttpResponse::InternalServerError().json(Response {
+                success: false,
+                message: format!("Failed to query collection: {}", err),
+            }));
+        }
+    };
+
+    let existing_fields: Vec<(String, String)> = {
+        let mut stmt = match conn.prepare(
+            "SELECT field_name, field_type FROM _database_metadata WHERE table_name = ?1",
+        ) {
+            Ok(stmt) => stmt,
+            Err(err) => {
+                return Ok(HttpResponse::InternalServerError().json(Response {
+                    success: false,
+                    message: format!("Failed to prepare metadata query: {}", err),
+                }));
+            }
+        };
+
+        match stmt.query_map([&current_table_name], |row| {
+            Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
+        }) {
+            Ok(rows) => rows.filter_map(|r| r.ok()).collect(),
+            Err(err) => {
+                return Ok(HttpResponse::InternalServerError().json(Response {
+                    success: false,
+                    message: format!("Failed to fetch existing fields: {}", err),
+                }));
+            }
+        }
+    };
+
+    let incoming_field_names: std::collections::HashSet<String> =
+        data.fields.iter().map(|f| f.title.clone()).collect();
+
+    let removed_fields: Vec<(String, String)> = existing_fields
+        .iter()
+        .filter(|(name, _)| !incoming_field_names.contains(name))
+        .cloned()
+        .collect();
+
+    let removed_file_fields: Vec<String> = removed_fields
+        .iter()
+        .filter(|(_, field_type)| field_type == "FILE")
+        .map(|(name, _)| name.clone())
+        .collect();
+
+    if !removed_file_fields.is_empty() {
+        let cols = removed_file_fields
+            .iter()
+            .map(|f| format!("\"{}\"", f))
+            .collect::<Vec<_>>()
+            .join(", ");
+
+        let select_query = format!("SELECT {} FROM \"{}\"", cols, current_table_name);
+
+        if let Ok(mut stmt) = conn.prepare(&select_query) {
+            let col_count = removed_file_fields.len();
+            let _ = stmt
+                .query_map([], |row| {
+                    let mut paths = Vec::new();
+                    for i in 0..col_count {
+                        if let Ok(Some(raw)) = row.get::<_, Option<String>>(i) {
+                            if let Ok(serde_json::Value::Array(arr)) = serde_json::from_str(&raw) {
+                                for entry in arr {
+                                    if let Some(p) = entry.as_str() {
+                                        paths.push(p.to_string());
+                                    }
+                                }
+                            } else {
+                                paths.push(raw);
+                            }
+                        }
+                    }
+                    Ok(paths)
+                })
+                .and_then(|rows| rows.collect::<Result<Vec<_>, _>>())
+                .map(|all_paths| {
+                    for paths in all_paths {
+                        for path in paths {
+                            let _ = std::fs::remove_file(&path);
+                        }
+                    }
+                });
+        }
+    }
+
+    let existing_field_names: std::collections::HashSet<String> =
+        existing_fields.iter().map(|(name, _)| name.clone()).collect();
+
+    let new_fields: Vec<&UpdateCollectionFields> = data
+        .fields
+        .iter()
+        .filter(|f| !existing_field_names.contains(&f.title))
+        .collect();
+
+    for field in &new_fields {
+        let mut alter_sql = format!(
+            "ALTER TABLE \"{}\" ADD COLUMN \"{}\" {}",
+            current_table_name,
+            field.title,
+            sql_type_from_field_type(&field.field_type)
+        );
+
+        if field.unique {
+            alter_sql.push_str(" UNIQUE");
+        }
+
+        if let Err(err) = conn.execute(&alter_sql, []) {
+            return Ok(HttpResponse::InternalServerError().json(Response {
+                success: false,
+                message: format!("Failed to add column '{}': {}", field.title, err),
+            }));
+        }
+    }
+
+    for (field_name, _) in &removed_fields {
+        if let Err(err) = conn.execute(
+            &format!(
+                "ALTER TABLE \"{}\" DROP COLUMN \"{}\"",
+                current_table_name, field_name
+            ),
+            [],
+        ) {
+            return Ok(HttpResponse::InternalServerError().json(Response {
+                success: false,
+                message: format!("Failed to drop column '{}': {}", field_name, err),
+            }));
+        }
+    }
+
+    let target_table_name = match &data.collection_name {
+        Some(new_name) if new_name != &current_table_name => {
+            let name_taken: Result<i64, _> = conn.query_row(
+                "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name=?1",
+                [new_name],
+                |row| row.get(0),
+            );
+
+            if let Ok(count) = name_taken {
+                if count > 0 {
+                    return Ok(HttpResponse::BadRequest().json(Response {
+                        success: false,
+                        message: format!("A collection named '{}' already exists", new_name),
+                    }));
+                }
+            }
+
+            if let Err(err) = conn.execute(
+                &format!(
+                    "ALTER TABLE \"{}\" RENAME TO \"{}\"",
+                    current_table_name, new_name
+                ),
+                [],
+            ) {
+                return Ok(HttpResponse::InternalServerError().json(Response {
+                    success: false,
+                    message: format!("Failed to rename table: {}", err),
+                }));
+            }
+
+            if let Err(err) = conn.execute(
+                "UPDATE _database_metadata SET table_name = ?1 WHERE table_id = ?2",
+                rusqlite::params![new_name, data.collection_id],
+            ) {
+                return Ok(HttpResponse::InternalServerError().json(Response {
+                    success: false,
+                    message: format!("Failed to update metadata table name: {}", err),
+                }));
+            }
+
+            new_name.clone()
+        }
+        _ => current_table_name.clone(),
+    };
+
+    for (field_name, _) in &removed_fields {
+        if let Err(err) = conn.execute(
+            "DELETE FROM _database_metadata WHERE table_name = ?1 AND field_name = ?2",
+            rusqlite::params![target_table_name, field_name],
+        ) {
+            return Ok(HttpResponse::InternalServerError().json(Response {
+                success: false,
+                message: format!("Failed to remove metadata for field '{}': {}", field_name, err),
+            }));
+        }
+    }
+
+    for field in &data.fields {
+        if existing_field_names.contains(&field.title) {
+            if let Err(err) = conn.execute(
+                "UPDATE _database_metadata SET field_type = ?1, unique_field = ?2, nullable = ?3, min = ?4, max = ?5, allowed_extensions = ?6, updated_at = CURRENT_TIMESTAMP WHERE table_name = ?7 AND field_name = ?8",
+                rusqlite::params![
+                    field.field_type,
+                    field.unique,
+                    field.nullable,
+                    field.min,
+                    field.max,
+                    field.allowed_extensions,
+                    target_table_name,
+                    field.title,
+                ],
+            ) {
+                return Ok(HttpResponse::InternalServerError().json(Response {
+                    success: false,
+                    message: format!("Failed to update metadata for field '{}': {}", field.title, err),
+                }));
+            }
+        } else {
+            if let Err(err) = conn.execute(
+                "INSERT INTO _database_metadata (table_id, table_name, field_name, field_type, unique_field, nullable, min, max, allowed_extensions) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
+                rusqlite::params![
+                    data.collection_id,
+                    target_table_name,
+                    field.title,
+                    field.field_type,
+                    field.unique,
+                    field.nullable,
+                    field.min,
+                    field.max,
+                    field.allowed_extensions,
+                ],
+            ) {
+                return Ok(HttpResponse::InternalServerError().json(Response {
+                    success: false,
+                    message: format!("Failed to insert metadata for field '{}': {}", field.title, err),
+                }));
+            }
+        }
+    }
+
+    Ok(HttpResponse::Ok().json(Response {
+        success: true,
+        message: format!("Collection '{}' updated successfully", target_table_name),
+    }))
+}

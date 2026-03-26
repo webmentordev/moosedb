@@ -170,7 +170,8 @@ async fn main() -> std::io::Result<()> {
                             .service(get_super_admins)
                             .service(create_record)
                             .service(update_your_password)
-                            .service(delete_collection_records),
+                            .service(delete_collection_records)
+                            .service(update_collection),
                     )
                     .service(
                         web::scope("/api")

@@ -8,10 +8,14 @@
                 <div class="flex items-center">
                     <h1 class="text-lg">Collections</h1>
                     <span class="mx-3">/ <strong class="ml-2">{{ active_tb_name }}</strong></span>
+                    <button @click="update_show = true"
+                        class="w-7.5 h-7.5 flex items-center justify-center bg-blue-600/5 rounded-full mr-1">
+                        <img src="https://api.iconify.design/ic:baseline-edit.svg?color=%232563eb" width="16">
+                    </button>
                     <button @click="show = true"
-                        class="w-7.5 h-7.5 flex items-center justify-center bg-red-600/5 rounded-full"><img
-                            src="https://api.iconify.design/ic:baseline-delete-forever.svg?color=%23e01b24"
-                            width="20"></button>
+                        class="w-7.5 h-7.5 flex items-center justify-center bg-red-600/5 rounded-full">
+                        <img src="https://api.iconify.design/ic:baseline-delete-forever.svg?color=%23e01b24" width="20">
+                    </button>
                 </div>
                 <div class="flex items-center">
                     <button @click="api_preview = true"
@@ -19,9 +23,9 @@
                         Preview API
                     </button>
                     <button @click="record_show = true"
-                        class="py-2 px-3 ml-3 bg-main hover:bg-main/10 disabled:bg-gray-400 rounded-xl font-semibold text-sm">+
-                        New
-                        record</button>
+                        class="py-2 px-3 ml-3 bg-main hover:bg-main/10 disabled:bg-gray-400 rounded-xl font-semibold text-sm">
+                        + New record
+                    </button>
                 </div>
             </div>
 
@@ -30,6 +34,13 @@
 
             <AppCreateRecord v-model:record_show="record_show" :columns="columns" :collection_id="active_tb"
                 @fetch-data="get_collection(active_tb)" />
+
+            <AppUpdateCollection
+                v-model:show="update_show"
+                :collection-id="active_tb"
+                :collection-name="active_tb_name"
+                :columns="columns"
+                @fetch-data="onCollectionUpdated" />
 
             <AppTable :records="records" :columns="columns" :collection-id="active_tb"
                 @fetch-data="get_collection(active_tb)" />
@@ -57,16 +68,13 @@
 definePageMeta({
     middleware: 'auth'
 });
-const errors = ref({
-    message: null,
-    count: 0
-});
 
-const body = ref("");
+const errors = ref({ message: null, count: 0 });
 const records = ref([]);
 const columns = ref([]);
 const record_show = ref(false);
 const api_preview = ref(false);
+const update_show = ref(false);
 
 const { authFetch } = useAuthFetch();
 const show = ref(false);
@@ -79,7 +87,7 @@ const active_tb_name = ref(null);
 
 if (route.query.tb) {
     active_tb.value = route.query.tb;
-    await get_collection(active_tb.value)
+    await get_collection(active_tb.value);
 }
 
 await fetch_collections();
@@ -94,7 +102,7 @@ if (active_tb.value && collections.value.length > 0) {
 watch(() => route.query.tb, async (newTb) => {
     active_tb.value = newTb || null;
     if (active_tb.value) {
-        await get_collection(active_tb.value)
+        await get_collection(active_tb.value);
         const value = collections.value.find(item => item.table_id == active_tb.value);
         if (value) {
             active_tb_name.value = value.table_name;
@@ -122,15 +130,22 @@ async function fetch_collections() {
     }
 }
 
+async function onCollectionUpdated() {
+    await fetch_collections();
+    await get_collection(active_tb.value);
+    const value = collections.value.find(item => item.table_id == active_tb.value);
+    if (value) {
+        active_tb_name.value = value.table_name;
+    }
+}
+
 async function delete_collection() {
     resetValues();
     processing.value = true;
     try {
         const response = await authFetch('/admin/api/delete-collection', {
-            method: "POST",
-            body: {
-                collection_id: active_tb.value
-            }
+            method: 'POST',
+            body: { collection_id: active_tb.value }
         });
         if (response.success) {
             success_message.value = response.message;
@@ -149,10 +164,8 @@ async function delete_collection() {
 async function get_collection(table_id) {
     try {
         const response = await authFetch('/admin/api/get-collection-records', {
-            method: "POST",
-            body: {
-                collection_id: table_id
-            }
+            method: 'POST',
+            body: { collection_id: table_id }
         });
         if (response.success) {
             columns.value = response.columns;
@@ -164,7 +177,6 @@ async function get_collection(table_id) {
         errors.value.message = error.data.message;
     }
 }
-
 
 function resetValues() {
     success_message.value = null;
