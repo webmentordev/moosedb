@@ -9,6 +9,16 @@ use std::collections::HashMap;
 pub fn initialize_db(conn: &Connection, create_new_db: bool) -> Result<()> {
     if create_new_db == true {
         conn.execute(
+            "CREATE TABLE IF NOT EXISTS _logs (
+            id INTEGER PRIMARY KEY,
+            method VARCHAR(10) NOT NULL,
+            url TEXT NOT NULL,
+            ip VARCHAR(45),
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )",
+            [],
+        )?;
+        conn.execute(
             "CREATE TABLE IF NOT EXISTS _configs (
                 id INTEGER PRIMARY KEY,
                 key VARCHAR(255) NOT NULL,
